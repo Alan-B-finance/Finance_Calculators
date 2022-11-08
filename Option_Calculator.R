@@ -52,8 +52,6 @@ setMethod("initialize", "Option",
           }
 )
 
-
-
 TreeEuropeanOption <- setClass(
   
   "TreeEuropeanOption",
@@ -91,7 +89,6 @@ BinomialEuropeanOption <- setClass(
   slots = c(
     cu = "numeric", #%change in a up move
     cd = "numeric", #%change in a down move
-    TP = "numeric", #Vector of terminal prices
     
     pu = "numeric", #Probability of price changing up, in risk-neutral regime
     pd = "numeric" #Probability of price changing down, in risk-neutral regime
@@ -124,10 +121,9 @@ setGeneric("BinomialEuropeanOptionStockPrices", function(optionName)
 setMethod(f="BinomialEuropeanOptionStockPrices", signature="BinomialEuropeanOption", 
           definition=function(optionName) {
             EndNodeRevenue <- c()
-            ProbabilityTable <- c()
+            ProbabilityTable <- dbinom(seq(0, optionName@N, 1), optionName@N, optionName@pd)
             for(i in 0:optionName@N){
               EndNodeRevenue[i+1] <- optionName@S0 * ((1+optionName@cu)^(optionName@N-i)) * (1-optionName@cd)^i
-              ProbabilityTable[i+1] <- factorial(optionName@N)/(factorial(i)*factorial(optionName@N-i)) * optionName@pu^(optionName@N-i)*optionName@pd^i
             }
             if (optionName@flag == "c") {
               PayOut <- pmax(0, EndNodeRevenue - optionName@K)
