@@ -135,6 +135,9 @@ setMethod(f="BinomialEuropeanOptionStockPrices", signature="BinomialEuropeanOpti
               PayOut <- pmax(0, optionName@K - EndNodeRevenue)
             }
             PayOut <- PayOut * optionName@DiscountFactor
+            optionName@p <- sum(PayOut * ProbabilityTable)
+            nameObject <- deparse(substitute(MyOption))
+            assign(nameObject, optionName, envir=parent.frame())
             return(sum(PayOut * ProbabilityTable))
         }
 )
