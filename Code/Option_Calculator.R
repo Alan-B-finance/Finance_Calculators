@@ -12,8 +12,8 @@ Option <- setClass(
     flag = "character", #c for call, p for put
     vol = "numeric", #yearly volatility
     p = "numeric", #Price of the option
-    
     Years = "numeric", #time to maturity in years
+    
     DiscountFactor = "numeric" #Overall discount Factor to maturity
   ),
   
@@ -28,8 +28,10 @@ Option <- setClass(
       return("Error: Barrier can't be lower than 0")
     } else if(object@r < 0){
       return("Error: Risk free rate can't be lower than 0")
-    } else if(nchar(object@cD) != 8 | nchar(object@mD) != 8){
-      return("Error: Please provide dates in the yyyymmdd format")
+    } else if(length(object@cD) > 0 & length(object@mD) > 0){
+      if(nchar(object@cD) != 8 | nchar(object@mD) != 8){
+        return("Error: Please provide dates in the yyyymmdd format")
+      }
     } else if(!(object@flag %in% c("c", "p"))){
       return("Error: The flag can either be c (call) or p (put)")
     } else if(length(object@p > 0)){
@@ -47,7 +49,9 @@ setMethod("initialize", "Option",
             .Object <- callNextMethod(.Object, ...)
             validObject(.Object)
             
-            .Object@Years <- as.numeric(as.Date(as.character(.Object@mD), format("%Y%m%d")) - as.Date(as.character(.Object@cD), format("%Y%m%d")))/365
+            if(length(.Object@Years) == 0){
+              .Object@Years <- as.numeric(as.Date(as.character(.Object@mD), format("%Y%m%d")) - as.Date(as.character(.Object@cD), format("%Y%m%d")))/365
+            }
             .Object@DiscountFactor <- 1/exp(.Object@r - .Object@div)^(.Object@Years)
             
             return(.Object)
