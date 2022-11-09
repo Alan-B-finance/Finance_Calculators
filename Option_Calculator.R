@@ -10,7 +10,6 @@ Option <- setClass(
     mD = "numeric", #Maturity Date in yyyymmdd format
     div = "numeric", #Dividend yield
     flag = "character", #c for call, p for put
-    flavor = "character", #e for European, a for American
     p = "numeric", #Price of the option
     
     Years = "numeric", #time to maturity in years
@@ -32,8 +31,6 @@ Option <- setClass(
       return("Error: Please provide dates in the yyyymmdd format")
     } else if(!(object@flag %in% c("c", "p"))){
       return("Error: The flag can either be c (call) or p (put)")
-    } else if(!(object@flavor %in% c("e", "a"))){
-      return("Error: The flag can either be e (european) or a (american)")
     } else if(length(object@p > 0)){
         if(object@p < 0){
           return("Error: Price of an option can't be lower than 0")
@@ -86,9 +83,9 @@ setMethod("initialize", "TreeEuropeanOption",
           }
 )
 
-BinomialEuropeanOption <- setClass(
+BinomialEuropeanStockOption <- setClass(
   
-  "BinomialEuropeanOption",
+  "BinomialEuropeanStockOption",
   
   slots = c(
     cu = "numeric", #%change in a up move
@@ -107,7 +104,7 @@ BinomialEuropeanOption <- setClass(
   contains = "TreeEuropeanOption"
 )
 
-setMethod("initialize", "BinomialEuropeanOption",
+setMethod("initialize", "BinomialEuropeanStockOption",
           function(.Object, ...) {
             .Object <- callNextMethod(.Object, ...)
             validObject(.Object)
@@ -119,10 +116,10 @@ setMethod("initialize", "BinomialEuropeanOption",
           }
 )
 
-setGeneric("BinomialEuropeanOptionStockPrices", function(optionName) 
-  standardGeneric("BinomialEuropeanOptionStockPrices") )
+setGeneric("BinomialEuropeanStockOptionStockPrices", function(optionName) 
+  standardGeneric("BinomialEuropeanStockOptionStockPrices") )
 
-setMethod(f="BinomialEuropeanOptionStockPrices", signature="BinomialEuropeanOption", 
+setMethod(f="BinomialEuropeanStockOptionStockPrices", signature="BinomialEuropeanStockOption", 
           #Method does not calculate the entire tree, only the end nodes are needed for European Option
           
           definition=function(optionName) {
@@ -144,9 +141,9 @@ setMethod(f="BinomialEuropeanOptionStockPrices", signature="BinomialEuropeanOpti
           }
 )
 
-BinomialAmericanOption <- setClass(
+BinomialAmericanStockOption <- setClass(
   
-  "BinomialAmericanOption",
+  "BinomialAmericanStockOption",
   
   slots = c(
     cu = "numeric", #%change in a up move
@@ -167,7 +164,7 @@ BinomialAmericanOption <- setClass(
   contains = "TreeEuropeanOption"
 )
 
-setMethod("initialize", "BinomialAmericanOption",
+setMethod("initialize", "BinomialAmericanStockOption",
           function(.Object, ...) {
             .Object <- callNextMethod(.Object, ...)
             validObject(.Object)
@@ -181,10 +178,11 @@ setMethod("initialize", "BinomialAmericanOption",
           }
 )
 
-setGeneric("BinomialAmericanOptionStockPrices", function(optionName) 
-  standardGeneric("BinomialAmericanOptionStockPrices") )
+setGeneric("BinomialAmericanStockOptionStockPrices", function(optionName) 
+  standardGeneric("BinomialAmericanStockOptionStockPrices") )
 
-setMethod(f="BinomialAmericanOptionStockPrices", signature="BinomialAmericanOption", 
+setMethod(f="BinomialAmericanStockOptionStockPrices", signature="BinomialAmericanStockOption",
+          #Probably can be done a lot faster
           definition=function(optionName) {
             StockMovement <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
             EndNodeRevenue <- c()
