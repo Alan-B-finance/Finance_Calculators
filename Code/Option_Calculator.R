@@ -10,6 +10,7 @@ Option <- setClass(
     mD = "numeric", #Maturity Date in yyyymmdd format
     div = "numeric", #Dividend yield
     flag = "character", #c for call, p for put
+    vol = "numeric", #yearly volatility
     p = "numeric", #Price of the option
     
     Years = "numeric", #time to maturity in years
@@ -90,14 +91,23 @@ BinomialEuropeanStockOption <- setClass(
   slots = c(
     cu = "numeric", #%change in a up move
     cd = "numeric", #%change in a down move
+    vol = "numeric", #yearly volatility
     
     pu = "numeric", #Probability of price changing up, in risk-neutral regime
     pd = "numeric" #Probability of price changing down, in risk-neutral regime
   ),
   
   validity = function(object){
-    if(object@cu <= 0 | object@cd <= 0){
-      return("Error: You can't have changes in price smaller or equal to 0")
+    if(length(object@cu) > 0 & length(object@cd) > 0){
+      if(object@cu <= 0 | object@cd <= 0){
+        return("Error: You can't have changes in price smaller or equal to 0")
+      } else if(length(object@vol) > 0){
+        return("Error: Provide either volatility or price changes at nodes")
+      }
+    } else if(length(object@vol) > 0){
+      if(object@vol < 0){
+        return("Volatility can't be lower than 0")
+      }
     }
   },
   
@@ -109,6 +119,10 @@ setMethod("initialize", "BinomialEuropeanStockOption",
             .Object <- callNextMethod(.Object, ...)
             validObject(.Object)
             
+            if(length(.Object@vol) > 0){
+              .Object@cu <- .Object@vol/sqrt(.Object@N/.Object@Years)/100
+              .Object@cd <- .Object@cu
+            }
             .Object@pu <- (exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)-(1-.Object@cd))/((1+.Object@cu)-(1-.Object@cd))
             .Object@pd <- 1-.Object@pu
             
@@ -148,6 +162,7 @@ BinomialAmericanStockOption <- setClass(
   slots = c(
     cu = "numeric", #%change in a up move
     cd = "numeric", #%change in a down move
+    vol = "numeric", #yearly volatility
     
     pu = "numeric", #Probability of price changing up, in risk-neutral regime
     pd = "numeric", #Probability of price changing down, in risk-neutral regime
@@ -156,8 +171,16 @@ BinomialAmericanStockOption <- setClass(
   ),
   
   validity = function(object){
-    if(object@cu <= 0 | object@cd <= 0){
-      return("Error: You can't have changes in price smaller or equal to 0")
+    if(length(object@cu) > 0 & length(object@cd) > 0){
+      if(object@cu <= 0 | object@cd <= 0){
+        return("Error: You can't have changes in price smaller or equal to 0")
+      } else if(length(object@vol) > 0){
+        return("Error: Provide either volatility or price changes at nodes")
+      }
+    } else if(length(object@vol) > 0){
+      if(object@vol < 0){
+        return("Volatility can't be lower than 0")
+      }
     }
   },
   
@@ -169,6 +192,10 @@ setMethod("initialize", "BinomialAmericanStockOption",
             .Object <- callNextMethod(.Object, ...)
             validObject(.Object)
             
+            if(length(.Object@vol) > 0){
+              .Object@cu <- .Object@vol/sqrt(.Object@N/.Object@Years)/100
+              .Object@cd <- .Object@cu
+            }
             .Object@pu <- (exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)-(1-.Object@cd))/((1+.Object@cu)-(1-.Object@cd))
             .Object@pd <- 1-.Object@pu
             .Object@YearsPerTimesstep <- .Object@Years / .Object@N
