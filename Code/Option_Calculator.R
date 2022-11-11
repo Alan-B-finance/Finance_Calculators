@@ -88,80 +88,9 @@ setMethod("initialize", "TreeEuropeanOption",
           }
 )
 
-BinomialEuropeanStockOption <- setClass(
+BinomialStockOption <- setClass(
   
-  "BinomialEuropeanStockOption",
-  
-  slots = c(
-    cu = "numeric", #%change in a up move
-    cd = "numeric", #%change in a down move
-    vol = "numeric", #yearly volatility
-    
-    pu = "numeric", #Probability of price changing up, in risk-neutral regime
-    pd = "numeric" #Probability of price changing down, in risk-neutral regime
-  ),
-  
-  validity = function(object){
-    if(length(object@cu) > 0 & length(object@cd) > 0){
-      if(object@cu <= 0 | object@cd <= 0){
-        return("Error: You can't have changes in price smaller or equal to 0")
-      } else if(length(object@vol) > 0){
-        return("Error: Provide either volatility or price changes at nodes")
-      }
-    } else if(length(object@vol) > 0){
-      if(object@vol < 0){
-        return("Volatility can't be lower than 0")
-      }
-    }
-  },
-  
-  contains = "TreeEuropeanOption"
-)
-
-setMethod("initialize", "BinomialEuropeanStockOption",
-          function(.Object, ...) {
-            .Object <- callNextMethod(.Object, ...)
-            validObject(.Object)
-            
-            if(length(.Object@vol) > 0){
-              .Object@cu <- .Object@vol/sqrt(.Object@N/.Object@Years)/100
-              .Object@cd <- .Object@cu
-            }
-            .Object@pu <- (exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)-(1-.Object@cd))/((1+.Object@cu)-(1-.Object@cd))
-            .Object@pd <- 1-.Object@pu
-            
-            return(.Object)
-          }
-)
-
-setGeneric("BinomialEuropeanStockOptionStockPrices", function(optionName) 
-  standardGeneric("BinomialEuropeanStockOptionStockPrices") )
-
-setMethod(f="BinomialEuropeanStockOptionStockPrices", signature="BinomialEuropeanStockOption", 
-          #Method does not calculate the entire tree, only the end nodes are needed for European Option
-          
-          definition=function(optionName) {
-            EndNodeRevenue <- c()
-            ProbabilityTable <- dbinom(seq(0, optionName@N, 1), optionName@N, optionName@pd)
-            for(i in 0:optionName@N){
-              EndNodeRevenue[i+1] <- optionName@S0 * ((1+optionName@cu)^(optionName@N-i)) * (1-optionName@cd)^i
-            }
-            if (optionName@flag == "c") {
-              PayOut <- pmax(0, EndNodeRevenue - optionName@K)
-            } else if (optionName@flag == "p"){
-              PayOut <- pmax(0, optionName@K - EndNodeRevenue)
-            }
-            PayOut <- PayOut * optionName@DiscountFactor
-            optionName@p <- sum(PayOut * ProbabilityTable)
-            nameObject <- deparse(substitute(MyOption))
-            assign(nameObject, optionName, envir=parent.frame()) #Overrides a price in the global environment
-            return(optionName@p)
-          }
-)
-
-BinomialAmericanStockOption <- setClass(
-  
-  "BinomialAmericanStockOption",
+  "BinomialStockOption",
   
   slots = c(
     cu = "numeric", #%change in a up move
@@ -191,7 +120,7 @@ BinomialAmericanStockOption <- setClass(
   contains = "TreeEuropeanOption"
 )
 
-setMethod("initialize", "BinomialAmericanStockOption",
+setMethod("initialize", "BinomialStockOption",
           function(.Object, ...) {
             .Object <- callNextMethod(.Object, ...)
             validObject(.Object)
@@ -209,11 +138,37 @@ setMethod("initialize", "BinomialAmericanStockOption",
           }
 )
 
+setGeneric("BinomialEuropeanStockOptionStockPrices", function(optionName) 
+  standardGeneric("BinomialEuropeanStockOptionStockPrices") )
+
+setMethod(f="BinomialEuropeanStockOptionStockPrices", signature="BinomialStockOption", 
+          #Method does not calculate the entire tree, only the end nodes are needed for European Option
+          
+          definition=function(optionName) {
+            EndNodeRevenue <- c()
+            ProbabilityTable <- dbinom(seq(0, optionName@N, 1), optionName@N, optionName@pd)
+            for(i in 0:optionName@N){
+              EndNodeRevenue[i+1] <- optionName@S0 * ((1+optionName@cu)^(optionName@N-i)) * (1-optionName@cd)^i
+            }
+            if (optionName@flag == "c") {
+              PayOut <- pmax(0, EndNodeRevenue - optionName@K)
+            } else if (optionName@flag == "p"){
+              PayOut <- pmax(0, optionName@K - EndNodeRevenue)
+            }
+            PayOut <- PayOut * optionName@DiscountFactor
+            optionName@p <- sum(PayOut * ProbabilityTable)
+            nameObject <- deparse(substitute(MyOption))
+            assign(nameObject, optionName, envir=parent.frame()) #Overrides a price in the global environment
+            return(optionName@p)
+          }
+)
+
 setGeneric("BinomialAmericanStockOptionStockPrices", function(optionName) 
   standardGeneric("BinomialAmericanStockOptionStockPrices") )
 
-setMethod(f="BinomialAmericanStockOptionStockPrices", signature="BinomialAmericanStockOption",
+setMethod(f="BinomialAmericanStockOptionStockPrices", signature="BinomialStockOption",
           #Probably can be done a lot faster
+          #Big trees will take a lot of time and a lot of RAM
           definition=function(optionName) {
             StockMovement <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
             EndNodeRevenue <- c()
