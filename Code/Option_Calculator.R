@@ -64,7 +64,6 @@ TreeEuropeanOption <- setClass(
   
   slots = c(
     N = "numeric", #Number of steps
-    VolatilityMethod = "character", #what method to use for volatility, either BSE (Black-Scholes Equivalent), CcR (Cox–Ross–Rubinstein) or Basic (when we just put change in price for every step)
     
     YearsPerTimeStep = "numeric" #duration of a single time step,in years
   ),
@@ -72,8 +71,6 @@ TreeEuropeanOption <- setClass(
   validity = function(object){
     if(object@N%%1 != 0 | object@N < 1){
       return("Error: Number of steps needs to be a natural number")
-    } else if(!(object@VolatilityMethod %in% c("BSE", "CCR", "Basic"))){
-      return("Error: Incorrect volatility method")
     }
   },
   
@@ -99,6 +96,7 @@ BinomialStockOption <- setClass(
     cu = "numeric", #%change in a up move
     cd = "numeric", #%change in a down move
     vol = "numeric", #yearly volatility
+    VolatilityMethod = "character", #what method to use for volatility, either BSE (Black-Scholes Equivalent), CcR (Cox–Ross–Rubinstein) or Basic (when we just put change in price for every step)
     
     pu = "numeric", #Probability of price changing up, in risk-neutral regime
     pd = "numeric", #Probability of price changing down, in risk-neutral regime
@@ -117,6 +115,8 @@ BinomialStockOption <- setClass(
       if(object@vol < 0){
         return("Volatility can't be lower than 0")
       }
+    } else if(!(object@VolatilityMethod %in% c("BSE", "CCR", "Basic"))){
+      return("Error: Incorrect volatility method")
     }
   },
   
@@ -139,7 +139,7 @@ setMethod("initialize", "BinomialStockOption",
             if(.Object@VolatilityMethod == "CCR"){
               .Object@pu <- (exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)-(.Object@cd))/((.Object@cu)-(.Object@cd))
               .Object@pd <- 1-.Object@pu
-            } else{
+            } else {
               .Object@pu <- (exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)-(1-.Object@cd))/((1+.Object@cu)-(1-.Object@cd))
               .Object@pd <- 1-.Object@pu
             }
@@ -191,13 +191,13 @@ setMethod(f="BinomialAmericanStockOptionStockPrices", signature="BinomialStockOp
             if(optionName@VolatilityMethod == "CCR"){
               for(j in 1:ncol(StockMovement)){
                 for(i in 1:j){
-                  StockMovement[i, j] <- optionName@S0 * ((optionName@cu)^(j-i)) * (optionName@cd)^(i-1)# / optionName@DiscountFactorPerTimeStep^j
+                  StockMovement[i, j] <- optionName@S0 * ((optionName@cu)^(j-i)) * (optionName@cd)^(i-1)
                 }
               }
-            } else{
+            } else {
               for(j in 1:ncol(StockMovement)){
                 for(i in 1:j){
-                  StockMovement[i, j] <- optionName@S0 * ((1+optionName@cu)^(j-i)) * (1-optionName@cd)^(i-1)# / optionName@DiscountFactorPerTimeStep^j
+                  StockMovement[i, j] <- optionName@S0 * ((1+optionName@cu)^(j-i)) * (1-optionName@cd)^(i-1)
                 }
               }
             }
