@@ -64,6 +64,7 @@ TreeEuropeanOption <- setClass(
   
   slots = c(
     N = "numeric", #Number of steps
+    VolatilityMethod = "character", #what method to use for volatility, either BSE (Black-Scholes Equivalent), CcR (Cox–Ross–Rubinstein) or Basic (when we just put change in price for every step)
     
     YearsPerTimeStep = "numeric" #duration of a single time step,in years
   ),
@@ -71,6 +72,8 @@ TreeEuropeanOption <- setClass(
   validity = function(object){
     if(object@N%%1 != 0 | object@N < 1){
       return("Error: Number of steps needs to be a natural number")
+    } else if(!(object@VolatilityMethod %in% c("BSE", "CCR", "Basic"))){
+      return("Error: Incorrect volatility method")
     }
   },
   
@@ -125,13 +128,21 @@ setMethod("initialize", "BinomialStockOption",
             .Object <- callNextMethod(.Object, ...)
             validObject(.Object)
             
-            if(length(.Object@vol) > 0){
+            .Object@YearsPerTimesstep <- .Object@Years / .Object@N
+            if(.Object@VolatilityMethod == "BSE"){
               .Object@cu <- .Object@vol/sqrt(.Object@N/.Object@Years)/100
               .Object@cd <- .Object@cu
+            } else if(.Object@VolatilityMethod == "CCR"){
+              .Object@cu <- exp((.Object@vol/100) * sqrt(.Object@YearsPerTimesstep))
+              .Object@cd <- 1/(.Object@cu)
             }
-            .Object@pu <- (exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)-(1-.Object@cd))/((1+.Object@cu)-(1-.Object@cd))
-            .Object@pd <- 1-.Object@pu
-            .Object@YearsPerTimesstep <- .Object@Years / .Object@N
+            if(.Object@VolatilityMethod == "CCR"){
+              .Object@pu <- (exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)-(.Object@cd))/((.Object@cu)-(.Object@cd))
+              .Object@pd <- 1-.Object@pu
+            } else{
+              .Object@pu <- (exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)-(1-.Object@cd))/((1+.Object@cu)-(1-.Object@cd))
+              .Object@pd <- 1-.Object@pu
+            }
             .Object@DiscountFactorPerTimeStep <- exp(-(.Object@r - .Object@div)*.Object@YearsPerTimesstep)
             
             return(.Object)
@@ -147,8 +158,14 @@ setMethod(f="BinomialEuropeanStockOptionStockPrices", signature="BinomialStockOp
           definition=function(optionName) {
             EndNodeRevenue <- c()
             ProbabilityTable <- dbinom(seq(0, optionName@N, 1), optionName@N, optionName@pd)
-            for(i in 0:optionName@N){
-              EndNodeRevenue[i+1] <- optionName@S0 * ((1+optionName@cu)^(optionName@N-i)) * (1-optionName@cd)^i
+            if(optionName@VolatilityMethod == "CCR"){
+              for(i in 0:optionName@N){
+                EndNodeRevenue[i+1] <- optionName@S0 * ((optionName@cu)^(optionName@N-i)) * (optionName@cd)^i
+              }
+            } else {
+              for(i in 0:optionName@N){
+                EndNodeRevenue[i+1] <- optionName@S0 * ((1+optionName@cu)^(optionName@N-i)) * (1-optionName@cd)^i
+              }
             }
             if (optionName@flag == "c") {
               PayOut <- pmax(0, EndNodeRevenue - optionName@K)
@@ -171,10 +188,17 @@ setMethod(f="BinomialAmericanStockOptionStockPrices", signature="BinomialStockOp
           #Big trees will take a lot of time and a lot of RAM
           definition=function(optionName) {
             StockMovement <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
-            EndNodeRevenue <- c()
-            for(j in 1:ncol(StockMovement)){
-              for(i in 1:j){
-                StockMovement[i, j] <- optionName@S0 * ((1+optionName@cu)^(j-i)) * (1-optionName@cd)^(i-1)# / optionName@DiscountFactorPerTimeStep^j
+            if(optionName@VolatilityMethod == "CCR"){
+              for(j in 1:ncol(StockMovement)){
+                for(i in 1:j){
+                  StockMovement[i, j] <- optionName@S0 * ((optionName@cu)^(j-i)) * (optionName@cd)^(i-1)# / optionName@DiscountFactorPerTimeStep^j
+                }
+              }
+            } else{
+              for(j in 1:ncol(StockMovement)){
+                for(i in 1:j){
+                  StockMovement[i, j] <- optionName@S0 * ((1+optionName@cu)^(j-i)) * (1-optionName@cd)^(i-1)# / optionName@DiscountFactorPerTimeStep^j
+                }
               }
             }
             if (optionName@flag == "c") {
