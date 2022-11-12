@@ -58,14 +58,16 @@ setMethod("initialize", "Option",
           }
 )
 
-TreeEuropeanOption <- setClass(
+TreeOption <- setClass(
   
-  "TreeEuropeanOption",
+  "TreeOption",
   
   slots = c(
     N = "numeric", #Number of steps
+    VolatilityMethod = "character", #what method to use for volatility, either BSE (Black-Scholes Equivalent), CcR (Cox–Ross–Rubinstein) or Basic (when we just put change in price for every step)
     
-    YearsPerTimeStep = "numeric" #duration of a single time step,in years
+    YearsPerTimeStep = "numeric", #duration of a single time step,in years
+    DiscountFactorPerTimeStep = "numeric" #Discouning factor used for drift
   ),
   
   validity = function(object){
@@ -77,12 +79,13 @@ TreeEuropeanOption <- setClass(
   contains = c("Option", "VIRTUAL")
 )
 
-setMethod("initialize", "TreeEuropeanOption",
+setMethod("initialize", "TreeOption",
           function(.Object, ...) {
             .Object <- callNextMethod(.Object, ...)
             validObject(.Object)
             
             .Object@YearsPerTimeStep <- .Object@Years / .Object@N
+            .Object@DiscountFactorPerTimeStep <- exp(-(.Object@r - .Object@div)*.Object@YearsPerTimeStep)
             
             return(.Object)
           }
@@ -96,12 +99,9 @@ BinomialStockOption <- setClass(
     cu = "numeric", #%change in a up move
     cd = "numeric", #%change in a down move
     vol = "numeric", #yearly volatility
-    VolatilityMethod = "character", #what method to use for volatility, either BSE (Black-Scholes Equivalent), CcR (Cox–Ross–Rubinstein) or Basic (when we just put change in price for every step)
     
     pu = "numeric", #Probability of price changing up, in risk-neutral regime
-    pd = "numeric", #Probability of price changing down, in risk-neutral regime
-    YearsPerTimesstep = "numeric", #Duration of a single time step,in years
-    DiscountFactorPerTimeStep = "numeric" #Discouning factor used for drift
+    pd = "numeric" #Probability of price changing down, in risk-neutral regime
   ),
   
   validity = function(object){
@@ -120,7 +120,7 @@ BinomialStockOption <- setClass(
     }
   },
   
-  contains = "TreeEuropeanOption"
+  contains = "TreeOption"
 )
 
 setMethod("initialize", "BinomialStockOption",
@@ -128,12 +128,12 @@ setMethod("initialize", "BinomialStockOption",
             .Object <- callNextMethod(.Object, ...)
             validObject(.Object)
             
-            .Object@YearsPerTimesstep <- .Object@Years / .Object@N
+            .Object@YearsPerTimeStep <- .Object@Years / .Object@N
             if(.Object@VolatilityMethod == "BSE"){
               .Object@cu <- .Object@vol/sqrt(.Object@N/.Object@Years)/100
               .Object@cd <- .Object@cu
             } else if(.Object@VolatilityMethod == "CCR"){
-              .Object@cu <- exp((.Object@vol/100) * sqrt(.Object@YearsPerTimesstep))
+              .Object@cu <- exp((.Object@vol/100) * sqrt(.Object@YearsPerTimeStep))
               .Object@cd <- 1/(.Object@cu)
             }
             if(.Object@VolatilityMethod == "CCR"){
@@ -143,16 +143,15 @@ setMethod("initialize", "BinomialStockOption",
               .Object@pu <- (exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)-(1-.Object@cd))/((1+.Object@cu)-(1-.Object@cd))
               .Object@pd <- 1-.Object@pu
             }
-            .Object@DiscountFactorPerTimeStep <- exp(-(.Object@r - .Object@div)*.Object@YearsPerTimesstep)
             
             return(.Object)
           }
 )
 
 setGeneric("BinomialEuropeanStockOptionStockPrices", function(optionName) 
-  standardGeneric("BinomialEuropeanStockOptionStockPrices") )
+  standardGeneric("BinomialEuropeanStockOptionStockPrices"))
 
-setMethod(f="BinomialEuropeanStockOptionStockPrices", signature="BinomialStockOption", 
+setMethod(f="BinomialEuropeanStockOptionStockPrices", signature="TreeOption", 
           #Method does not calculate the entire tree, only the end nodes are needed for European Option
           
           definition=function(optionName) {
@@ -181,9 +180,9 @@ setMethod(f="BinomialEuropeanStockOptionStockPrices", signature="BinomialStockOp
 )
 
 setGeneric("BinomialAmericanStockOptionStockPrices", function(optionName) 
-  standardGeneric("BinomialAmericanStockOptionStockPrices") )
+  standardGeneric("BinomialAmericanStockOptionStockPrices"))
 
-setMethod(f="BinomialAmericanStockOptionStockPrices", signature="BinomialStockOption",
+setMethod(f="BinomialAmericanStockOptionStockPrices", signature="TreeOption",
           #Probably can be done a lot faster
           #Big trees will take a lot of time and a lot of RAM
           definition=function(optionName) {
@@ -220,5 +219,48 @@ setMethod(f="BinomialAmericanStockOptionStockPrices", signature="BinomialStockOp
             nameObject <- deparse(substitute(MyOption))
             assign(nameObject, optionName, envir=parent.frame()) #Overrides a price in the global environment
             return(optionName@p)
+          }
+)
+
+BinomialLRStockOption <- setClass(
+  
+  "BinomialLRStockOption",
+  
+  slots = c(
+    vol = "numeric", #yearly volatility
+    
+    d1 = "numeric",
+    d2 = "numeric",
+    LR = "numeric",
+    cu = "numeric", #%change in a up move
+    cd = "numeric", #%change in a down move
+    pu = "numeric", #Probability of price changing up, in risk-neutral regime
+    pd = "numeric" #Probability of price changing down, in risk-neutral regime
+  ),
+  
+  validity = function(object){
+    
+  },
+  
+  contains = "TreeOption"
+)
+
+setMethod("initialize", "BinomialLRStockOption",
+          function(.Object, ...) {
+            .Object <- callNextMethod(.Object, ...)
+            validObject(.Object)
+            
+            if(.Object@N%%2 == 0){
+              .Object@N <- .Object@N + 1
+            }
+            .Object@d1 <- (log(.Object@S0/.Object@K) + ((.Object@r - .Object@div) + ((.Object@vol/100)^2)/2)*.Object@Years)/((.Object@vol/100)*sqrt(.Object@Years))
+            .Object@d2 <- .Object@d1 - (.Object@vol/100)*sqrt(.Object@Years)
+            .Object@LR <- 1/2 + sign(.Object@d1)/2*sqrt(1-exp(-(.Object@d1/(.Object@N+1/3+0.1/(.Object@N+1)))^2*(.Object@N+1/6)))
+            .Object@pu <- 1/2 + sign(.Object@d2)/2*sqrt(1-exp(-(.Object@d2/(.Object@N+1/3+0.1/(.Object@N+1)))^2*(.Object@N+1/6)))
+            .Object@pd <- 1 - .Object@pu
+            .Object@cu <- exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)*(.Object@LR/.Object@pu)
+            .Object@cd <- exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)*((1-.Object@LR)/(1-.Object@pu))
+            
+            return(.Object)
           }
 )
