@@ -264,3 +264,63 @@ setMethod("initialize", "BinomialLRStockOption",
             return(.Object)
           }
 )
+
+setGeneric("TreeGraph", function(optionName, dx = -0.025, dy = 0.3, cex = 1, digits = 2, GraphType, ...) 
+  standardGeneric("TreeGraph"))
+
+setMethod(f="TreeGraph", signature="TreeOption",
+          #Probably can be done a lot faster
+          #Big trees will take a lot of time and a lot of RAM
+          definition=function(optionName, dx = -0.025, dy = 0.3, cex = 1, digits = 2, GraphType, ...) {
+            StockMovement <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
+            if(optionName@VolatilityMethod == "CCR"){
+              for(j in 1:ncol(StockMovement)){
+                for(i in 1:j){
+                  StockMovement[i, j] <- optionName@S0 * ((optionName@cu)^(j-i)) * (optionName@cd)^(i-1)
+                }
+              }
+            } else {
+              for(j in 1:ncol(StockMovement)){
+                for(i in 1:j){
+                  StockMovement[i, j] <- optionName@S0 * ((1+optionName@cu)^(j-i)) * (1-optionName@cd)^(i-1)
+                }
+              }
+            }
+            if (optionName@flag == "c") {
+              PayOut <- matrix(pmax(0, StockMovement - optionName@K), nrow = optionName@N+1, ncol = optionName@N+1)
+            } else if (optionName@flag == "p"){
+              PayOut <- matrix(pmax(0, optionName@K - StockMovement), nrow = optionName@N+1, ncol = optionName@N+1)
+            }
+            
+            MidNodeRevenue <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
+            MidNodeRevenue[, ncol(MidNodeRevenue)] <- PayOut[, ncol(PayOut)]
+            for(i in (ncol(MidNodeRevenue)-1):1){
+              for(k in 1:i){
+                MidNodeRevenue[k, i] <- (MidNodeRevenue[k, i+1] * optionName@pu + MidNodeRevenue[k+1, i+1] * optionName@pd) * optionName@DiscountFactorPerTimeStep
+              }
+              MidNodeRevenue[, i] <- pmax(MidNodeRevenue[, i], PayOut[, i])
+            }
+            
+            optionName@p <- MidNodeRevenue[1, 1]
+            
+            if(GraphType == "underlying"){
+              Tree = round(StockMovement, digits = digits)
+            } else if(GraphType == "Value"){
+              Tree = round(MidNodeRevenue, digits = digits)
+            }
+            depth = ncol(Tree)
+            plot(x = c(0, depth-1), y = c(-depth + 1, depth-0.5), type = "n", 
+                 col = 0, ...)
+            points(x = 0, y = 0)
+            text(0 + dx, 0 + dy, deparse(Tree[1, 1]), cex = cex)
+            for (i in 1:(depth - 1)) {
+              y = seq(from = -i, by = 2, length = i + 1)
+              x = rep(i, times = length(y)) + 0
+              points(x, y, col = 1)
+              for (j in 1:length(x)) text(x[j] + dx, y[j] + dy, deparse(Tree[length(x) + 1 - j, i + 1]), cex = cex)
+              y = (-i):i
+              x = rep(c(i, i-1), times = 2 * i)[1:length(y)]
+              lines(x, y, col = 2)
+            }
+          }
+)
