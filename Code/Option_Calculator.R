@@ -391,7 +391,7 @@ setMethod(f="TreeGraph", signature="TreeOption",
             #Create plot's background
             depth = ncol(Tree)
             plot(x = c(0, depth-1), y = c(-depth + 1, depth-0.5), type = "n", 
-                 col = 0, ...)
+                 col = 0, xlab = "Depth of the tree", ylab = "Height of the tree")
             
             #Add the first point
             points(x = 0, y = 0)
