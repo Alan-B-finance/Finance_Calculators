@@ -39,6 +39,12 @@ Option <- setClass(
         if(object@p < 0){
           return("Error: Price of an option can't be lower than 0")
       }
+    } else if(length(object@Years > 0)){
+      if(object@Years < 0){
+        return("Error: Years to maturity can't be lower than 0")
+      }
+    } else if(!(object@flavor %in% c("a", "e"))){
+      return("Error: The flag can either be a (american) or e (european)")
     }
   },
   
@@ -50,6 +56,7 @@ setMethod("initialize", "Option",
             .Object <- callNextMethod(.Object, ...)
             validObject(.Object)
             
+            #If dates are provided calculate the years to maturity
             if(length(.Object@Years) == 0){
               .Object@Years <- as.numeric(as.Date(as.character(.Object@mD), format("%Y%m%d")) - as.Date(as.character(.Object@cD), format("%Y%m%d")))/365
             }
@@ -130,6 +137,7 @@ setMethod("initialize", "BinomialStockOption",
             .Object <- callNextMethod(.Object, ...)
             validObject(.Object)
             
+            #If volatility is provided, calculate equivalent in changes of the price at each step
             if(length(.Object@vol) > 0){
               .Object@cu <- .Object@vol/sqrt(.Object@N/.Object@Years)/100
               .Object@cd <- .Object@cu
@@ -187,9 +195,9 @@ BinomialLRStockOption <- setClass(
   slots = c(
     vol = "numeric", #yearly volatility
     
-    d1 = "numeric",
-    d2 = "numeric",
-    LR = "numeric",
+    d1 = "numeric", #Black-Scholes parameter
+    d2 = "numeric", #Black-Scholes parameter
+    LR = "numeric", #Parameter specific to the LR method
     cu = "numeric", #%change in a up move
     cd = "numeric", #%change in a down move
     pu = "numeric", #Probability of price changing up, in risk-neutral regime
@@ -229,10 +237,14 @@ setGeneric("FastBinomialEuropeanStockOptionPrices", function(optionName)
 
 setMethod(f="FastBinomialEuropeanStockOptionPrices", signature="TreeOption", 
           #Method does not calculate the entire tree, only the end nodes are needed for European Option
+          #Much faster, but only work for European vanilla options
           
           definition=function(optionName) {
             EndNodeRevenue <- c()
+            #Create a vector of possible outcomes based on binomial distribution given the probability
             ProbabilityTable <- dbinom(seq(0, optionName@N, 1), optionName@N, optionName@pd)
+            
+            #Depending on the flag, either add the price change or multiply it
             if(optionName@AdditionOrMuliplicationFlag == "m"){
               for(i in 0:optionName@N){
                 EndNodeRevenue[i+1] <- optionName@S0 * ((optionName@cu)^(optionName@N-i)) * (optionName@cd)^i
@@ -242,15 +254,23 @@ setMethod(f="FastBinomialEuropeanStockOptionPrices", signature="TreeOption",
                 EndNodeRevenue[i+1] <- optionName@S0 * ((1+optionName@cu)^(optionName@N-i)) * (1-optionName@cd)^i
               }
             }
+            
+            #Create payout vector based on outcomes and the strike
             if (optionName@flag == "c") {
               PayOut <- pmax(0, EndNodeRevenue - optionName@K)
             } else if (optionName@flag == "p"){
               PayOut <- pmax(0, optionName@K - EndNodeRevenue)
             }
+            
+            #Discount the payouts
             PayOut <- PayOut * optionName@DiscountFactor
+            
+            #The price is a sum of discounted payouts times the probability of these payouts
             optionName@p <- sum(PayOut * ProbabilityTable)
+            
+            #Overrides a price in the global environment
             nameObject <- deparse(substitute(MyOption))
-            assign(nameObject, optionName, envir=parent.frame()) #Overrides a price in the global environment
+            assign(nameObject, optionName, envir=parent.frame())
             return(optionName@p)
           }
 )
@@ -261,41 +281,52 @@ setGeneric("BinomialStockOptionPrices", function(optionName)
 setMethod(f="BinomialStockOptionPrices", signature="TreeOption",
           #Probably can be done a lot faster
           #Big trees will take a lot of time and a lot of RAM
+          
           definition=function(optionName) {
             StockMovement <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
-            if(optionName@VolatilityMethod == "CCR"){
+            
+            #Create the tree of underlying's movements, either add the price changes or multiply by them
+            if(optionName@AdditionOrMuliplicationFlag == "m"){
               for(j in 1:ncol(StockMovement)){
                 for(i in 1:j){
                   StockMovement[i, j] <- optionName@S0 * ((optionName@cu)^(j-i)) * (optionName@cd)^(i-1)
                 }
               }
-            } else {
+            } else if(optionName@AdditionOrMuliplicationFlag == "a"){
               for(j in 1:ncol(StockMovement)){
                 for(i in 1:j){
                   StockMovement[i, j] <- optionName@S0 * ((1+optionName@cu)^(j-i)) * (1-optionName@cd)^(i-1)
                 }
               }
             }
+            
+            #Create payout vector based on outcomes and the strike
             if (optionName@flag == "c") {
               PayOut <- matrix(pmax(0, StockMovement - optionName@K), nrow = optionName@N+1, ncol = optionName@N+1)
             } else if (optionName@flag == "p"){
               PayOut <- matrix(pmax(0, optionName@K - StockMovement), nrow = optionName@N+1, ncol = optionName@N+1)
             }
             
+            #Starting from the end, calculate the nodes values, taking into account the probabilities of up and down moves
             MidNodeRevenue <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
             MidNodeRevenue[, ncol(MidNodeRevenue)] <- PayOut[, ncol(PayOut)]
             for(i in (ncol(MidNodeRevenue)-1):1){
               for(k in 1:i){
                 MidNodeRevenue[k, i] <- (MidNodeRevenue[k, i+1] * optionName@pu + MidNodeRevenue[k+1, i+1] * optionName@pd) * optionName@DiscountFactorPerTimeStep
               }
+              
+              #If the option is american, on every step of tree's depth the tree's value is either current value of exercising the option or the future possible values
               if(optionName@flavor == "a"){
                 MidNodeRevenue[, i] <- pmax(MidNodeRevenue[, i], PayOut[, i])
               }
             }
             
+            #The price is the first value in the tree
             optionName@p <- MidNodeRevenue[1, 1]
+            
+            #Overrides a price in the global environment
             nameObject <- deparse(substitute(MyOption))
-            assign(nameObject, optionName, envir=parent.frame()) #Overrides a price in the global environment
+            assign(nameObject, optionName, envir=parent.frame())
             return(optionName@p)
           }
 )
@@ -306,7 +337,12 @@ setGeneric("TreeGraph", function(optionName, dx = -0.025, dy = 0.3, cex = 1, dig
 setMethod(f="TreeGraph", signature="TreeOption",
           #Probably can be done a lot faster
           #Big trees will take a lot of time and a lot of RAM
+          
           definition=function(optionName, dx = -0.025, dy = 0.3, cex = 1, digits = 2, GraphType, ...) {
+            #dx moves the text in the x direction, dy in the y direction, cex is scaling multiplier and digits is a rounding parameter
+            #GraphType tells what should be graphed, either underlying's movements, the values of the option or the payouts of the option
+            
+            #Create the tree of underlying's movements, either add the price changes or multiply by them
             StockMovement <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
             if(optionName@AdditionOrMuliplicationFlag == "m"){
               for(j in 1:ncol(StockMovement)){
@@ -321,35 +357,47 @@ setMethod(f="TreeGraph", signature="TreeOption",
                 }
               }
             }
+            
+            #Create payout vector based on outcomes and the strike
             if (optionName@flag == "c") {
               PayOut <- matrix(pmax(0, StockMovement - optionName@K), nrow = optionName@N+1, ncol = optionName@N+1)
             } else if (optionName@flag == "p"){
               PayOut <- matrix(pmax(0, optionName@K - StockMovement), nrow = optionName@N+1, ncol = optionName@N+1)
             }
             
+            #Starting from the end, calculate the nodes values, taking into account the probabilities of up and down moves
             MidNodeRevenue <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
             MidNodeRevenue[, ncol(MidNodeRevenue)] <- PayOut[, ncol(PayOut)]
             for(i in (ncol(MidNodeRevenue)-1):1){
               for(k in 1:i){
                 MidNodeRevenue[k, i] <- (MidNodeRevenue[k, i+1] * optionName@pu + MidNodeRevenue[k+1, i+1] * optionName@pd) * optionName@DiscountFactorPerTimeStep
               }
+              
+              #If the option is american, on every step of tree's depth the tree's value is either current value of exercising the option or the future possible values
               if(optionName@flavor == "a"){
                 MidNodeRevenue[, i] <- pmax(MidNodeRevenue[, i], PayOut[, i])
               }
             }
             
+            #Select what to graph based on flag
             if(GraphType == "underlying"){
               Tree = round(StockMovement, digits = digits)
             } else if(GraphType == "Value"){
               Tree = round(MidNodeRevenue, digits = digits)
             } else if(GraphType == "payout"){
               Tree = round(PayOut, digits = digits)
-            } 
+            }
+            
+            #Create plot's background
             depth = ncol(Tree)
             plot(x = c(0, depth-1), y = c(-depth + 1, depth-0.5), type = "n", 
                  col = 0, ...)
+            
+            #Add the first point
             points(x = 0, y = 0)
             text(0 + dx, 0 + dy, deparse(Tree[1, 1]), cex = cex)
+            
+            #Add the rest of the points
             for (i in 1:(depth - 1)) {
               y = seq(from = -i, by = 2, length = i + 1)
               x = rep(i, times = length(y)) + 0
