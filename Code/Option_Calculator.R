@@ -65,11 +65,12 @@ TreeOption <- setClass(
   
   slots = c(
     N = "numeric", #Number of steps
-    VolatilityMethod = "character", #what method to use for volatility, either BSE (Black-Scholes Equivalent), CcR (Cox–Ross–Rubinstein) or Basic (when we just put change in price for every step)
-    
+
     YearsPerTimeStep = "numeric", #duration of a single time step,in years
-    DiscountFactorPerTimeStep = "numeric" #Discouning factor used for drift
-  ),
+    DiscountFactorPerTimeStep = "numeric", #Discouning factor used for the drift
+    AdditionOrMuliplicationFlag = "character" #Should script add the difference or multiply by it, hidden variable
+  
+    ),
   
   validity = function(object){
     if(object@N%%1 != 0 | object@N < 1){
@@ -129,21 +130,51 @@ setMethod("initialize", "BinomialStockOption",
             .Object <- callNextMethod(.Object, ...)
             validObject(.Object)
             
-            .Object@YearsPerTimeStep <- .Object@Years / .Object@N
-            if(.Object@VolatilityMethod == "BSE"){
+            if(length(.Object@vol) > 0){
               .Object@cu <- .Object@vol/sqrt(.Object@N/.Object@Years)/100
               .Object@cd <- .Object@cu
-            } else if(.Object@VolatilityMethod == "CCR"){
-              .Object@cu <- exp((.Object@vol/100) * sqrt(.Object@YearsPerTimeStep))
-              .Object@cd <- 1/(.Object@cu)
             }
-            if(.Object@VolatilityMethod == "CCR"){
-              .Object@pu <- (exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)-(.Object@cd))/((.Object@cu)-(.Object@cd))
-              .Object@pd <- 1-.Object@pu
-            } else {
-              .Object@pu <- (exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)-(1-.Object@cd))/((1+.Object@cu)-(1-.Object@cd))
-              .Object@pd <- 1-.Object@pu
-            }
+            .Object@pu <- (exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)-(1-.Object@cd))/((1+.Object@cu)-(1-.Object@cd))
+            .Object@pd <- 1-.Object@pu
+            .Object@AdditionOrMuliplicationFlag <- "a"
+            
+            return(.Object)
+          }
+)
+
+
+BinomialCCRStockOption <- setClass(
+  
+  "BinomialCCRStockOption",
+  
+  slots = c(
+    vol = "numeric", #yearly volatility
+    
+    cu = "numeric", #%change in a up move
+    cd = "numeric", #%change in a down move
+    pu = "numeric", #Probability of price changing up, in risk-neutral regime
+    pd = "numeric" #Probability of price changing down, in risk-neutral regime
+  ),
+  
+  validity = function(object){
+    if(object@vol < 0){
+      return("Volatility can't be lower than 0")
+    }
+  },
+  
+  contains = "TreeOption"
+)
+
+setMethod("initialize", "BinomialCCRStockOption",
+          function(.Object, ...) {
+            .Object <- callNextMethod(.Object, ...)
+            validObject(.Object)
+            
+            .Object@cu <- exp((.Object@vol/100) * sqrt(.Object@YearsPerTimeStep))
+            .Object@cd <- 1/(.Object@cu)
+            .Object@pu <- (exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)-(.Object@cd))/((.Object@cu)-(.Object@cd))
+            .Object@pd <- 1-.Object@pu
+            .Object@AdditionOrMuliplicationFlag <- "m"
             
             return(.Object)
           }
@@ -158,11 +189,11 @@ setMethod(f="FastBinomialEuropeanStockOptionPrices", signature="TreeOption",
           definition=function(optionName) {
             EndNodeRevenue <- c()
             ProbabilityTable <- dbinom(seq(0, optionName@N, 1), optionName@N, optionName@pd)
-            if(optionName@VolatilityMethod == "CCR"){
+            if(optionName@AdditionOrMuliplicationFlag == "m"){
               for(i in 0:optionName@N){
                 EndNodeRevenue[i+1] <- optionName@S0 * ((optionName@cu)^(optionName@N-i)) * (optionName@cd)^i
               }
-            } else {
+            } else if(optionName@AdditionOrMuliplicationFlag == "a") {
               for(i in 0:optionName@N){
                 EndNodeRevenue[i+1] <- optionName@S0 * ((1+optionName@cu)^(optionName@N-i)) * (1-optionName@cd)^i
               }
@@ -263,6 +294,7 @@ setMethod("initialize", "BinomialLRStockOption",
             .Object@pd <- 1 - .Object@pu
             .Object@cu <- exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)*(.Object@LR/.Object@pu)
             .Object@cd <- exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)*((1-.Object@LR)/(1-.Object@pu))
+            .Object@AdditionOrMuliplicationFlag <- "m"
             
             return(.Object)
           }
@@ -276,13 +308,13 @@ setMethod(f="TreeGraph", signature="TreeOption",
           #Big trees will take a lot of time and a lot of RAM
           definition=function(optionName, dx = -0.025, dy = 0.3, cex = 1, digits = 2, GraphType, ...) {
             StockMovement <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
-            if(optionName@VolatilityMethod == "CCR"){
+            if(optionName@AdditionOrMuliplicationFlag == "m"){
               for(j in 1:ncol(StockMovement)){
                 for(i in 1:j){
                   StockMovement[i, j] <- optionName@S0 * ((optionName@cu)^(j-i)) * (optionName@cd)^(i-1)
                 }
               }
-            } else {
+            } else if(optionName@AdditionOrMuliplicationFlag == "a") {
               for(j in 1:ncol(StockMovement)){
                 for(i in 1:j){
                   StockMovement[i, j] <- optionName@S0 * ((1+optionName@cu)^(j-i)) * (1-optionName@cd)^(i-1)
