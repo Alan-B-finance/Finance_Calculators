@@ -13,6 +13,7 @@ Option <- setClass(
     vol = "numeric", #yearly volatility
     p = "numeric", #Price of the option
     Years = "numeric", #time to maturity in years
+    flavor = "character", #a for american, e for european
     
     DiscountFactor = "numeric" #Overall discount Factor to maturity
   ),
@@ -148,10 +149,10 @@ setMethod("initialize", "BinomialStockOption",
           }
 )
 
-setGeneric("BinomialEuropeanStockOptionStockPrices", function(optionName) 
-  standardGeneric("BinomialEuropeanStockOptionStockPrices"))
+setGeneric("FastBinomialEuropeanStockOptionPrices", function(optionName) 
+  standardGeneric("FastBinomialEuropeanStockOptionPrices"))
 
-setMethod(f="BinomialEuropeanStockOptionStockPrices", signature="TreeOption", 
+setMethod(f="FastBinomialEuropeanStockOptionPrices", signature="TreeOption", 
           #Method does not calculate the entire tree, only the end nodes are needed for European Option
           
           definition=function(optionName) {
@@ -179,10 +180,10 @@ setMethod(f="BinomialEuropeanStockOptionStockPrices", signature="TreeOption",
           }
 )
 
-setGeneric("BinomialAmericanStockOptionStockPrices", function(optionName) 
-  standardGeneric("BinomialAmericanStockOptionStockPrices"))
+setGeneric("BinomialStockOptionPrices", function(optionName) 
+  standardGeneric("BinomialStockOptionPrices"))
 
-setMethod(f="BinomialAmericanStockOptionStockPrices", signature="TreeOption",
+setMethod(f="BinomialStockOptionPrices", signature="TreeOption",
           #Probably can be done a lot faster
           #Big trees will take a lot of time and a lot of RAM
           definition=function(optionName) {
@@ -212,7 +213,9 @@ setMethod(f="BinomialAmericanStockOptionStockPrices", signature="TreeOption",
               for(k in 1:i){
                 MidNodeRevenue[k, i] <- (MidNodeRevenue[k, i+1] * optionName@pu + MidNodeRevenue[k+1, i+1] * optionName@pd) * optionName@DiscountFactorPerTimeStep
               }
-              MidNodeRevenue[, i] <- pmax(MidNodeRevenue[, i], PayOut[, i])
+              if(optionName@flavor == "a"){
+                MidNodeRevenue[, i] <- pmax(MidNodeRevenue[, i], PayOut[, i])
+              }
             }
             
             optionName@p <- MidNodeRevenue[1, 1]
@@ -298,7 +301,9 @@ setMethod(f="TreeGraph", signature="TreeOption",
               for(k in 1:i){
                 MidNodeRevenue[k, i] <- (MidNodeRevenue[k, i+1] * optionName@pu + MidNodeRevenue[k+1, i+1] * optionName@pd) * optionName@DiscountFactorPerTimeStep
               }
-              MidNodeRevenue[, i] <- pmax(MidNodeRevenue[, i], PayOut[, i])
+              if(optionName@flavor == "a"){
+                MidNodeRevenue[, i] <- pmax(MidNodeRevenue[, i], PayOut[, i])
+              }
             }
             
             if(GraphType == "underlying"){
