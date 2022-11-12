@@ -301,13 +301,13 @@ setMethod(f="TreeGraph", signature="TreeOption",
               MidNodeRevenue[, i] <- pmax(MidNodeRevenue[, i], PayOut[, i])
             }
             
-            optionName@p <- MidNodeRevenue[1, 1]
-            
             if(GraphType == "underlying"){
               Tree = round(StockMovement, digits = digits)
             } else if(GraphType == "Value"){
               Tree = round(MidNodeRevenue, digits = digits)
-            }
+            } else if(GraphType == "payout"){
+              Tree = round(PayOut, digits = digits)
+            } 
             depth = ncol(Tree)
             plot(x = c(0, depth-1), y = c(-depth + 1, depth-0.5), type = "n", 
                  col = 0, ...)
