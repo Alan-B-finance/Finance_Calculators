@@ -180,6 +180,50 @@ setMethod("initialize", "BinomialCCRStockOption",
           }
 )
 
+BinomialLRStockOption <- setClass(
+  
+  "BinomialLRStockOption",
+  
+  slots = c(
+    vol = "numeric", #yearly volatility
+    
+    d1 = "numeric",
+    d2 = "numeric",
+    LR = "numeric",
+    cu = "numeric", #%change in a up move
+    cd = "numeric", #%change in a down move
+    pu = "numeric", #Probability of price changing up, in risk-neutral regime
+    pd = "numeric" #Probability of price changing down, in risk-neutral regime
+  ),
+  
+  validity = function(object){
+    
+  },
+  
+  contains = "TreeOption"
+)
+
+setMethod("initialize", "BinomialLRStockOption",
+          function(.Object, ...) {
+            .Object <- callNextMethod(.Object, ...)
+            validObject(.Object)
+            
+            if(.Object@N%%2 == 0){
+              .Object@N <- .Object@N + 1
+            }
+            .Object@d1 <- (log(.Object@S0/.Object@K) + ((.Object@r - .Object@div) + ((.Object@vol/100)^2)/2)*.Object@Years)/((.Object@vol/100)*sqrt(.Object@Years))
+            .Object@d2 <- .Object@d1 - (.Object@vol/100)*sqrt(.Object@Years)
+            .Object@LR <- 1/2 + sign(.Object@d1)/2*sqrt(1-exp(-(.Object@d1/(.Object@N+1/3+0.1/(.Object@N+1)))^2*(.Object@N+1/6)))
+            .Object@pu <- 1/2 + sign(.Object@d2)/2*sqrt(1-exp(-(.Object@d2/(.Object@N+1/3+0.1/(.Object@N+1)))^2*(.Object@N+1/6)))
+            .Object@pd <- 1 - .Object@pu
+            .Object@cu <- exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)*(.Object@LR/.Object@pu)
+            .Object@cd <- exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)*((1-.Object@LR)/(1-.Object@pu))
+            .Object@AdditionOrMuliplicationFlag <- "m"
+            
+            return(.Object)
+          }
+)
+
 setGeneric("FastBinomialEuropeanStockOptionPrices", function(optionName) 
   standardGeneric("FastBinomialEuropeanStockOptionPrices"))
 
@@ -253,50 +297,6 @@ setMethod(f="BinomialStockOptionPrices", signature="TreeOption",
             nameObject <- deparse(substitute(MyOption))
             assign(nameObject, optionName, envir=parent.frame()) #Overrides a price in the global environment
             return(optionName@p)
-          }
-)
-
-BinomialLRStockOption <- setClass(
-  
-  "BinomialLRStockOption",
-  
-  slots = c(
-    vol = "numeric", #yearly volatility
-    
-    d1 = "numeric",
-    d2 = "numeric",
-    LR = "numeric",
-    cu = "numeric", #%change in a up move
-    cd = "numeric", #%change in a down move
-    pu = "numeric", #Probability of price changing up, in risk-neutral regime
-    pd = "numeric" #Probability of price changing down, in risk-neutral regime
-  ),
-  
-  validity = function(object){
-    
-  },
-  
-  contains = "TreeOption"
-)
-
-setMethod("initialize", "BinomialLRStockOption",
-          function(.Object, ...) {
-            .Object <- callNextMethod(.Object, ...)
-            validObject(.Object)
-            
-            if(.Object@N%%2 == 0){
-              .Object@N <- .Object@N + 1
-            }
-            .Object@d1 <- (log(.Object@S0/.Object@K) + ((.Object@r - .Object@div) + ((.Object@vol/100)^2)/2)*.Object@Years)/((.Object@vol/100)*sqrt(.Object@Years))
-            .Object@d2 <- .Object@d1 - (.Object@vol/100)*sqrt(.Object@Years)
-            .Object@LR <- 1/2 + sign(.Object@d1)/2*sqrt(1-exp(-(.Object@d1/(.Object@N+1/3+0.1/(.Object@N+1)))^2*(.Object@N+1/6)))
-            .Object@pu <- 1/2 + sign(.Object@d2)/2*sqrt(1-exp(-(.Object@d2/(.Object@N+1/3+0.1/(.Object@N+1)))^2*(.Object@N+1/6)))
-            .Object@pd <- 1 - .Object@pu
-            .Object@cu <- exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)*(.Object@LR/.Object@pu)
-            .Object@cd <- exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)*((1-.Object@LR)/(1-.Object@pu))
-            .Object@AdditionOrMuliplicationFlag <- "m"
-            
-            return(.Object)
           }
 )
 
