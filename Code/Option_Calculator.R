@@ -190,6 +190,44 @@ setMethod("initialize", "BinomialCCRStockOption",
           }
 )
 
+BinomialJRStockOption <- setClass(
+  #Jarrow-Rudd model
+  
+  "BinomialJRStockOption",
+  
+  slots = c(
+    vol = "numeric", #yearly volatility
+    
+    cu = "numeric", #%change in a up move
+    cd = "numeric", #%change in a down move
+    pu = "numeric", #Probability of price changing up, in risk-neutral regime
+    pd = "numeric" #Probability of price changing down, in risk-neutral regime
+  ),
+  
+  validity = function(object){
+    if(object@vol < 0){
+      return("Volatility can't be lower than 0")
+    }
+  },
+  
+  contains = "TreeOption"
+)
+
+setMethod("initialize", "BinomialJRStockOption",
+          function(.Object, ...) {
+            .Object <- callNextMethod(.Object, ...)
+            validObject(.Object)
+            
+            .Object@cu <- exp((.Object@r - .Object@div - (.Object@vol/100)^2/2) * .Object@YearsPerTimeStep + .Object@vol/100 * sqrt(.Object@YearsPerTimeStep))
+            .Object@cd <- exp((.Object@r - .Object@div - (.Object@vol/100)^2/2) * .Object@YearsPerTimeStep - .Object@vol/100 * sqrt(.Object@YearsPerTimeStep))
+            .Object@pu <- 0.5
+            .Object@pd <- 1-.Object@pu
+            .Object@AdditionOrMuliplicationFlag <- "m"
+            
+            return(.Object)
+          }
+)
+
 BinomialLRStockOption <- setClass(
   #Leisen-Reimer Model
   
