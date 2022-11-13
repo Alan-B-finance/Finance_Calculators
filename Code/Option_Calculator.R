@@ -101,6 +101,7 @@ setMethod("initialize", "TreeOption",
 )
 
 BinomialStockOption <- setClass(
+  #Basic binomial model
   
   "BinomialStockOption",
   
@@ -152,6 +153,7 @@ setMethod("initialize", "BinomialStockOption",
 
 
 BinomialCCRStockOption <- setClass(
+  #Cox-Ross-Rubinstein model
   
   "BinomialCCRStockOption",
   
@@ -189,6 +191,7 @@ setMethod("initialize", "BinomialCCRStockOption",
 )
 
 BinomialLRStockOption <- setClass(
+  #Leisen-Reimer Model
   
   "BinomialLRStockOption",
   
@@ -382,10 +385,13 @@ setMethod(f="TreeGraph", signature="TreeOption",
             #Select what to graph based on flag
             if(GraphType == "underlying"){
               Tree = round(StockMovement, digits = digits)
-            } else if(GraphType == "Value"){
+              GraphTitle <- "Underlying movement"
+            } else if(GraphType == "value"){
               Tree = round(MidNodeRevenue, digits = digits)
+              GraphTitle <- "Option value"
             } else if(GraphType == "payout"){
               Tree = round(PayOut, digits = digits)
+              GraphTitle <- "Payout of the option"
             }
             
             #Create plot's background
@@ -393,9 +399,16 @@ setMethod(f="TreeGraph", signature="TreeOption",
             plot(x = c(0, depth-1), y = c(-depth + 1, depth-0.5), type = "n", 
                  col = 0, xlab = "Depth of the tree", ylab = "Height of the tree")
             
+            #Add probabilities to the chart
+            text(x = 0.25, y = depth - 1, paste("Probability up:", round(optionName@pu, digits)), cex = cex)
+            text(x = 0.3, y = depth - 1 - 0.75, paste("Probability down:", round(optionName@pd, digits)), cex = cex)
+            
             #Add the first point
             points(x = 0, y = 0)
             text(0 + dx, 0 + dy, deparse(Tree[1, 1]), cex = cex)
+            
+            #Add title
+            title(GraphTitle)
             
             #Add the rest of the points
             for (i in 1:(depth - 1)) {
