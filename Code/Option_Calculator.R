@@ -460,3 +460,81 @@ setMethod(f="TreeGraph", signature="TreeOption",
             }
           }
 )
+
+setGeneric("BinomialStockOptionGreeks", function(optionName, digits = 4, method) 
+  standardGeneric("BinomialStockOptionGreeks"))
+
+setMethod(f="BinomialStockOptionGreeks", signature="TreeOption",
+          
+          definition=function(optionName, digits = 4, method) {
+            #dx moves the text in the x direction, dy in the y direction, cex is scaling multiplier and digits is a rounding parameter
+            #GraphType tells what should be graphed, either underlying's movements, the values of the option or the payouts of the option
+            
+            #Create the tree of underlying's movements, either add the price changes or multiply by them
+            StockMovement <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
+            if(optionName@AdditionOrMuliplicationFlag == "m"){
+              for(j in 1:ncol(StockMovement)){
+                for(i in 1:j){
+                  StockMovement[i, j] <- optionName@S0 * ((optionName@cu)^(j-i)) * (optionName@cd)^(i-1)
+                }
+              }
+            } else if(optionName@AdditionOrMuliplicationFlag == "a") {
+              for(j in 1:ncol(StockMovement)){
+                for(i in 1:j){
+                  StockMovement[i, j] <- optionName@S0 * ((1+optionName@cu)^(j-i)) * (1-optionName@cd)^(i-1)
+                }
+              }
+            }
+            
+            #Create payout vector based on outcomes and the strike
+            if (optionName@flag == "c") {
+              PayOut <- matrix(pmax(0, StockMovement - optionName@K), nrow = optionName@N+1, ncol = optionName@N+1)
+            } else if (optionName@flag == "p"){
+              PayOut <- matrix(pmax(0, optionName@K - StockMovement), nrow = optionName@N+1, ncol = optionName@N+1)
+            }
+            
+            #Starting from the end, calculate the nodes values, taking into account the probabilities of up and down moves
+            MidNodeRevenue <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
+            MidNodeRevenue[, ncol(MidNodeRevenue)] <- PayOut[, ncol(PayOut)]
+            for(i in (ncol(MidNodeRevenue)-1):1){
+              for(k in 1:i){
+                MidNodeRevenue[k, i] <- (MidNodeRevenue[k, i+1] * optionName@pu + MidNodeRevenue[k+1, i+1] * optionName@pd) * optionName@DiscountFactorPerTimeStep
+              }
+              
+              #If the option is american, on every step of tree's depth the tree's value is either current value of exercising the option or the future possible values
+              if(optionName@flavor == "a"){
+                MidNodeRevenue[, i] <- pmax(MidNodeRevenue[, i], PayOut[, i])
+              }
+            }
+            
+            if(method == "fast"){
+              
+              if(round(StockMovement[1, 1], 4) != round(StockMovement[2, 3], 4)){
+                print("Warning: Tree is not centered aroound the starting price, which means the incorrect method was used. Greeks won't be correct!")
+              }
+              
+              OptionDelta <- (MidNodeRevenue[1, 2] - MidNodeRevenue[2, 2]) / (StockMovement[1, 2] - StockMovement[2, 2])
+              hGamma <- (StockMovement[1, 3] - StockMovement[3, 3])/2
+              OptionGamma <- (((MidNodeRevenue[1, 3] - MidNodeRevenue[2, 3]) / (StockMovement[1, 3] - StockMovement[1, 1])) - ((MidNodeRevenue[2, 3] - MidNodeRevenue[3, 3]) / (StockMovement[1, 1] - StockMovement[3, 3]))) / hGamma
+              OptionTheta <- (MidNodeRevenue[2, 3] - MidNodeRevenue[1, 1]) / (2 * 365 * optionName@YearsPerTimeStep)
+              OptionVega <- MidNodeRevenue[1, 1] - BinomialStockOptionPrices(new(class(optionName)[1], optionName, vol = optionName@vol - 1))
+              OptionRho <- MidNodeRevenue[1, 1] - BinomialStockOptionPrices(new(class(optionName)[1], optionName, r = optionName@r - 0.01))
+              print(paste("Delta:", round(OptionDelta, digits)))
+              print(paste("Gamma:", round(OptionGamma, digits)))
+              print(paste("Theta:", round(OptionTheta, digits)))
+              print(paste("Vega:", round(OptionVega, digits)))
+              print(paste("Rho:", round(OptionRho, digits)))
+            } else if(method == "slow"){
+              OptionDelta <- (-BinomialStockOptionPrices(new(class(optionName)[1], optionName, S0 = optionName@S0 - 1)) + BinomialStockOptionPrices(new(class(optionName)[1], optionName, S0 = optionName@S0 + 1)))/2
+              OptionGamma <- ((OptionDelta - ((-BinomialStockOptionPrices(new(class(optionName)[1], optionName, S0 = optionName@S0 - 2)) + BinomialStockOptionPrices(new(class(optionName)[1], optionName, S0 = optionName@S0)))/2)) - (OptionDelta - ((-BinomialStockOptionPrices(new(class(optionName)[1], optionName, S0 = optionName@S0)) + BinomialStockOptionPrices(new(class(optionName)[1], optionName, S0 = optionName@S0 + 2)))/2)))/2
+              OptionTheta <- BinomialStockOptionPrices(new(class(optionName)[1], optionName, Years = optionName@Years - 1/365)) - MidNodeRevenue[1, 1]
+              OptionVega <- MidNodeRevenue[1, 1] - BinomialStockOptionPrices(new(class(optionName)[1], optionName, vol = optionName@vol - 1))
+              OptionRho <- MidNodeRevenue[1, 1] - BinomialStockOptionPrices(new(class(optionName)[1], optionName, r = optionName@r - 0.01))
+              print(paste("Delta:", round(OptionDelta, digits)))
+              print(paste("Gamma:", round(OptionGamma, digits)))
+              print(paste("Theta:", round(OptionTheta, digits)))
+              print(paste("Vega:", round(OptionVega, digits)))
+              print(paste("Rho:", round(OptionRho, digits)))
+            }
+          }
+)
