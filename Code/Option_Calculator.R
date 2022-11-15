@@ -273,6 +273,57 @@ setMethod("initialize", "BinomialLRStockOption",
           }
 )
 
+setGeneric("GenerateBinomialTree", function(optionName) 
+  standardGeneric("GenerateBinomialTree"))
+
+setMethod(f="GenerateBinomialTree", signature="TreeOption", 
+          #Probably can be done a lot faster
+          #Big trees will take a lot of time and a lot of RAM
+          
+          definition=function(optionName) {
+            StockMovement <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
+            
+            #Create the tree of underlying's movements, either add the price changes or multiply by them
+            if(optionName@AdditionOrMuliplicationFlag == "m"){
+              for(j in 1:ncol(StockMovement)){
+                for(i in 1:j){
+                  StockMovement[i, j] <- optionName@S0 * ((optionName@cu)^(j-i)) * (optionName@cd)^(i-1)
+                }
+              }
+            } else if(optionName@AdditionOrMuliplicationFlag == "a"){
+              for(j in 1:ncol(StockMovement)){
+                for(i in 1:j){
+                  StockMovement[i, j] <- optionName@S0 * ((1+optionName@cu)^(j-i)) * (1-optionName@cd)^(i-1)
+                }
+              }
+            }
+            
+            #Create payout vector based on outcomes and the strike
+            if (optionName@flag == "c") {
+              PayOut <- matrix(pmax(0, StockMovement - optionName@K), nrow = optionName@N+1, ncol = optionName@N+1)
+            } else if (optionName@flag == "p"){
+              PayOut <- matrix(pmax(0, optionName@K - StockMovement), nrow = optionName@N+1, ncol = optionName@N+1)
+            }
+            
+            #Starting from the end, calculate the nodes values, taking into account the probabilities of up and down moves
+            MidNodeRevenue <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
+            MidNodeRevenue[, ncol(MidNodeRevenue)] <- PayOut[, ncol(PayOut)]
+            for(i in (ncol(MidNodeRevenue)-1):1){
+              for(k in 1:i){
+                MidNodeRevenue[k, i] <- (MidNodeRevenue[k, i+1] * optionName@pu + MidNodeRevenue[k+1, i+1] * optionName@pd) * optionName@DiscountFactorPerTimeStep
+              }
+              
+              #If the option is american, on every step of tree's depth the tree's value is either current value of exercising the option or the future possible values
+              if(optionName@flavor == "a"){
+                MidNodeRevenue[, i] <- pmax(MidNodeRevenue[, i], PayOut[, i])
+              }
+              
+              OutputList <- list(StockMovement, MidNodeRevenue, PayOut)
+              return(OutputList)
+            }
+          }
+)
+
 setGeneric("FastBinomialEuropeanStockOptionPrices", function(optionName) 
   standardGeneric("FastBinomialEuropeanStockOptionPrices"))
 
