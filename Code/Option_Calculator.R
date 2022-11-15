@@ -508,6 +508,7 @@ setMethod(f="BinomialStockOptionGreeks", signature="TreeOption",
             }
             
             if(method == "fast"){
+              #Fast method uses some clever tricks to calculate greeks, but only works if the tree is centered around the starting price
               
               if(round(StockMovement[1, 1], 4) != round(StockMovement[2, 3], 4)){
                 print("Warning: Tree is not centered aroound the starting price, which means the incorrect method was used. Greeks won't be correct!")
@@ -525,6 +526,8 @@ setMethod(f="BinomialStockOptionGreeks", signature="TreeOption",
               print(paste("Vega:", round(OptionVega, digits)))
               print(paste("Rho:", round(OptionRho, digits)))
             } else if(method == "slow"){
+              #Slow method uses brute force to calculate greeks
+              
               OptionDelta <- (-BinomialStockOptionPrices(new(class(optionName)[1], optionName, S0 = optionName@S0 - 1)) + BinomialStockOptionPrices(new(class(optionName)[1], optionName, S0 = optionName@S0 + 1)))/2
               OptionGamma <- ((OptionDelta - ((-BinomialStockOptionPrices(new(class(optionName)[1], optionName, S0 = optionName@S0 - 2)) + BinomialStockOptionPrices(new(class(optionName)[1], optionName, S0 = optionName@S0)))/2)) - (OptionDelta - ((-BinomialStockOptionPrices(new(class(optionName)[1], optionName, S0 = optionName@S0)) + BinomialStockOptionPrices(new(class(optionName)[1], optionName, S0 = optionName@S0 + 2)))/2)))/2
               OptionTheta <- BinomialStockOptionPrices(new(class(optionName)[1], optionName, Years = optionName@Years - 1/365)) - MidNodeRevenue[1, 1]
