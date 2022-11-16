@@ -13,7 +13,8 @@ Option <- setClass(
     vol = "numeric", #yearly volatility
     p = "numeric", #Price of the option
     Years = "numeric", #time to maturity in years
-    flavor = "character", #a for american, e for european
+    flavor = "character", #a for american, e for european, b for bermudean
+    ExerciseDates = "vector", #vector of dates when an option can be exercised
     
     DiscountFactor = "numeric" #Overall discount Factor to maturity
   ),
@@ -24,9 +25,9 @@ Option <- setClass(
   
   validity = function(object){
     if(object@S0 < 0){
-      return("Error: Price can't be lower than 0")
+      return("Error: Underlying price can't be lower than 0")
     } else if(object@K < 0){
-      return("Error: Barrier can't be lower than 0")
+      return("Error: Strike can't be lower than 0")
     } else if(object@r < 0){
       return("Error: Risk free rate can't be lower than 0")
     } else if(length(object@cD) > 0 & length(object@mD) > 0){
@@ -43,8 +44,16 @@ Option <- setClass(
       if(object@Years < 0){
         return("Error: Years to maturity can't be lower than 0")
       }
-    } else if(!(object@flavor %in% c("a", "e"))){
-      return("Error: The flag can either be a (american) or e (european)")
+    } 
+    if(!(object@flavor %in% c("a", "e", "b"))){
+      return("Error: The flag can either be a (american), e (european) or b (bermudean)")
+    } 
+    if(object@flavor == "b"){
+      if(length(object@ExerciseDates) == 0){
+        return("Error: Provide exercise dates for the bermudean option")
+      } else if((object@N %% (length(object@ExerciseDates)+1)) != 0){
+        return("Error: The number of steps needs to be a multiple of the number of dates + 1")
+      }
     }
   },
   
@@ -60,6 +69,11 @@ setMethod("initialize", "Option",
             if(length(.Object@Years) == 0){
               .Object@Years <- as.numeric(as.Date(as.character(.Object@mD), format("%Y%m%d")) - as.Date(as.character(.Object@cD), format("%Y%m%d")))/365
             }
+            #if(.Object@flavor == "b"){
+            #  if(nchar(.Object@ExerciseDates[1]) == 8){
+            #    .Object@ExerciseDates <- as.numeric(as.Date(as.character(.Object@ExerciseDates), format("%Y%m%d")) - as.Date(as.character(.Object@cD), format("%Y%m%d")))/365
+            #  }
+            #}
             .Object@DiscountFactor <- 1/exp(.Object@r - .Object@div)^(.Object@Years)
             
             return(.Object)
@@ -281,6 +295,10 @@ setMethod(f="GenerateBinomialTree", signature="TreeOption",
           #Big trees will take a lot of time and a lot of RAM
           
           definition=function(optionName) {
+            if(optionName@flavor == "b"){
+              BermudeanMultiplier <- optionName@N/length(optionName@ExerciseDates)
+            }
+            
             StockMovement <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
             
             #Create the tree of underlying's movements, either add the price changes or multiply by them
@@ -316,6 +334,10 @@ setMethod(f="GenerateBinomialTree", signature="TreeOption",
               #If the option is american, on every step of tree's depth the tree's value is either current value of exercising the option or the future possible values
               if(optionName@flavor == "a"){
                 MidNodeRevenue[, i] <- pmax(MidNodeRevenue[, i], PayOut[, i])
+              } else if(optionName@flavor == "b"){
+                if((i-1)%%BermudeanMultiplier == 0){
+                  MidNodeRevenue[, i] <- pmax(MidNodeRevenue[, i], PayOut[, i])
+                }
               }
             }
             OutputList <- list(StockMovement, MidNodeRevenue, PayOut)
