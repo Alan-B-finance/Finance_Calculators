@@ -13,8 +13,10 @@ Option <- setClass(
     vol = "numeric", #yearly volatility
     p = "numeric", #Price of the option
     Years = "numeric", #time to maturity in years
-    flavor = "character", #a for american, e for european, b for bermudean
+    flavor = "character", #a for american, e for european, b for bermudan
     ExerciseDates = "vector", #vector of dates when an option can be exercised
+    Barrier = "numeric", #Price of a barrier
+    BarrierType = "character", #Type of a barrier
     
     DiscountFactor = "numeric" #Overall discount Factor to maturity
   ),
@@ -53,6 +55,13 @@ Option <- setClass(
         return("Error: Provide exercise dates for the bermudean option")
       } else if((object@N %% (length(object@ExerciseDates)+1)) != 0){
         return("Error: The number of steps needs to be a multiple of the number of dates + 1")
+      }
+    }
+    if(length(object@BarrierType) > 0){
+      if(!(object@BarrierType %in% c("KO", "KI"))){
+        return("Error: Barrier Type should be KO (knock-out) or KI (knock-in)")
+      } else if(length(object@BarrierType) == 0){
+        return("Error: Barrier Type provided but no barrier")
       }
     }
   },
@@ -319,14 +328,34 @@ setMethod(f="GenerateBinomialTree", signature="TreeOption",
             #Create payout vector based on outcomes and the strike
             if (optionName@flag == "c") {
               PayOut <- matrix(pmax(0, StockMovement - optionName@K), nrow = optionName@N+1, ncol = optionName@N+1)
+              
+              #Barrier option
+              if(length(optionName@BarrierType) > 0){
+                  if(optionName@Barrier > optionName@K){
+                    PayOut[, ncol(PayOut)] <- ifelse(StockMovement[, ncol(StockMovement)] > optionName@Barrier, 0, PayOut[, ncol(PayOut)])
+                  } else if(optionName@Barrier < optionName@K){
+                    PayOut[, ncol(PayOut)] <- ifelse(StockMovement[, ncol(StockMovement)] < optionName@Barrier, 0, PayOut[, ncol(PayOut)])
+                  }
+              }
+
             } else if (optionName@flag == "p"){
               PayOut <- matrix(pmax(0, optionName@K - StockMovement), nrow = optionName@N+1, ncol = optionName@N+1)
+              
+              #Barrier option
+              if(length(optionName@BarrierType) > 0){
+                if(optionName@Barrier > optionName@K){
+                  PayOut[, ncol(PayOut)] <- ifelse(StockMovement[, ncol(StockMovement)] > optionName@Barrier, 0, PayOut[, ncol(PayOut)])
+                } else if(optionName@Barrier < optionName@K){
+                  PayOut[, ncol(PayOut)] <- ifelse(StockMovement[, ncol(StockMovement)] < optionName@Barrier, 0, PayOut[, ncol(PayOut)])
+                }
+              }
             }
             
             #Starting from the end, calculate the nodes values, taking into account the probabilities of up and down moves
             MidNodeRevenue <- matrix(nrow = optionName@N+1, ncol = optionName@N+1)
             MidNodeRevenue[, ncol(MidNodeRevenue)] <- PayOut[, ncol(PayOut)]
             for(i in (ncol(MidNodeRevenue)-1):1){
+              
               for(k in 1:i){
                 MidNodeRevenue[k, i] <- (MidNodeRevenue[k, i+1] * optionName@pu + MidNodeRevenue[k+1, i+1] * optionName@pd) * optionName@DiscountFactorPerTimeStep
               }
@@ -339,7 +368,28 @@ setMethod(f="GenerateBinomialTree", signature="TreeOption",
                   MidNodeRevenue[, i] <- pmax(MidNodeRevenue[, i], PayOut[, i])
                 }
               }
+              
+              #Barrier option
+              if(length(optionName@BarrierType) > 0){
+                if(optionName@BarrierType == "KO" | optionName@flavor == "e"){
+                  if(optionName@Barrier > optionName@K){
+                    MidNodeRevenue[, i] <- ifelse(StockMovement[, i] > optionName@Barrier, 0, MidNodeRevenue[, i])
+                  } else if(optionName@Barrier < optionName@K){
+                    MidNodeRevenue[, i] <- ifelse(StockMovement[, i] < optionName@Barrier, 0, MidNodeRevenue[, i])
+                  }
+                }
+              }
             }
+            if(optionName@flavor == "e"){
+              if(length(optionName@BarrierType) > 0){
+                if(optionName@BarrierType == "KI"){
+                  VanillaTree <- GenerateBinomialTree(new(class(optionName)[1], optionName, Barrier = numeric(0), BarrierType = character(0)))
+                  MidNodeRevenueVanilla <- VanillaTree[[2]]
+                  MidNodeRevenue <- MidNodeRevenueVanilla - MidNodeRevenue
+                }
+              }
+            }
+            
             OutputList <- list(StockMovement, MidNodeRevenue, PayOut)
             return(OutputList)
           }
