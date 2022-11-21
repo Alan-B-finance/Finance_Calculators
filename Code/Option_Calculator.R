@@ -78,11 +78,6 @@ setMethod("initialize", "Option",
             if(length(.Object@Years) == 0){
               .Object@Years <- as.numeric(as.Date(as.character(.Object@mD), format("%Y%m%d")) - as.Date(as.character(.Object@cD), format("%Y%m%d")))/365
             }
-            #if(.Object@flavor == "b"){
-            #  if(nchar(.Object@ExerciseDates[1]) == 8){
-            #    .Object@ExerciseDates <- as.numeric(as.Date(as.character(.Object@ExerciseDates), format("%Y%m%d")) - as.Date(as.character(.Object@cD), format("%Y%m%d")))/365
-            #  }
-            #}
             .Object@DiscountFactor <- 1/exp(.Object@r - .Object@div)^(.Object@Years)
             
             return(.Object)
@@ -117,7 +112,7 @@ setMethod("initialize", "TreeOption",
             validObject(.Object)
             
             .Object@YearsPerTimeStep <- .Object@Years / .Object@N
-            .Object@DiscountFactorPerTimeStep <- exp(-(.Object@r - .Object@div)*.Object@YearsPerTimeStep)
+            .Object@DiscountFactorPerTimeStep <- exp(-(.Object@r)*.Object@YearsPerTimeStep)
             
             return(.Object)
           }
@@ -358,7 +353,7 @@ setMethod(f="GenerateBinomialTree", signature="TreeOption",
               
               for(k in 1:i){
                 MidNodeRevenue[k, i] <- (MidNodeRevenue[k, i+1] * optionName@pu + MidNodeRevenue[k+1, i+1] * optionName@pd) * optionName@DiscountFactorPerTimeStep
-              }
+                }
               
               #If the option is american, on every step of tree's depth the tree's value is either current value of exercising the option or the future possible values
               if(optionName@flavor == "a"){
