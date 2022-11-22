@@ -323,26 +323,16 @@ setMethod(f="GenerateBinomialTree", signature="TreeOption",
             #Create payout vector based on outcomes and the strike
             if (optionName@flag == "c") {
               PayOut <- matrix(pmax(0, StockMovement - optionName@K), nrow = optionName@N+1, ncol = optionName@N+1)
-              
-              #Barrier option
-              if(length(optionName@BarrierType) > 0){
-                  if(optionName@Barrier > optionName@K){
-                    PayOut[, ncol(PayOut)] <- ifelse(StockMovement[, ncol(StockMovement)] > optionName@Barrier, 0, PayOut[, ncol(PayOut)])
-                  } else if(optionName@Barrier < optionName@K){
-                    PayOut[, ncol(PayOut)] <- ifelse(StockMovement[, ncol(StockMovement)] < optionName@Barrier, 0, PayOut[, ncol(PayOut)])
-                  }
-              }
-
             } else if (optionName@flag == "p"){
               PayOut <- matrix(pmax(0, optionName@K - StockMovement), nrow = optionName@N+1, ncol = optionName@N+1)
-              
-              #Barrier option
-              if(length(optionName@BarrierType) > 0){
-                if(optionName@Barrier > optionName@K){
-                  PayOut[, ncol(PayOut)] <- ifelse(StockMovement[, ncol(StockMovement)] > optionName@Barrier, 0, PayOut[, ncol(PayOut)])
-                } else if(optionName@Barrier < optionName@K){
-                  PayOut[, ncol(PayOut)] <- ifelse(StockMovement[, ncol(StockMovement)] < optionName@Barrier, 0, PayOut[, ncol(PayOut)])
-                }
+            }
+            
+            #Barrier option
+            if(length(optionName@BarrierType) > 0){
+              if(optionName@Barrier > optionName@K){
+                PayOut[, ncol(PayOut)] <- ifelse(StockMovement[, ncol(StockMovement)] > optionName@Barrier, 0, PayOut[, ncol(PayOut)])
+              } else if(optionName@Barrier < optionName@K){
+                PayOut[, ncol(PayOut)] <- ifelse(StockMovement[, ncol(StockMovement)] < optionName@Barrier, 0, PayOut[, ncol(PayOut)])
               }
             }
             
