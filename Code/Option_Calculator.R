@@ -30,8 +30,6 @@ Option <- setClass(
       return("Error: Underlying price can't be lower than 0")
     } else if(object@K < 0){
       return("Error: Strike can't be lower than 0")
-    } else if(object@r < 0){
-      return("Error: Risk free rate can't be lower than 0")
     } else if(length(object@cD) > 0 & length(object@mD) > 0){
       if(nchar(object@cD) != 8 | nchar(object@mD) != 8){
         return("Error: Please provide dates in the yyyymmdd format")
@@ -126,7 +124,6 @@ BinomialStockOption <- setClass(
   slots = c(
     cu = "numeric", #%change in a up move
     cd = "numeric", #%change in a down move
-    vol = "numeric", #yearly volatility
     
     pu = "numeric", #Probability of price changing up, in risk-neutral regime
     pd = "numeric" #Probability of price changing down, in risk-neutral regime
@@ -176,7 +173,6 @@ BinomialCCRStockOption <- setClass(
   "BinomialCCRStockOption",
   
   slots = c(
-    vol = "numeric", #yearly volatility
     
     cu = "numeric", #%change in a up move
     cd = "numeric", #%change in a down move
@@ -214,7 +210,6 @@ BinomialJRStockOption <- setClass(
   "BinomialJRStockOption",
   
   slots = c(
-    vol = "numeric", #yearly volatility
     
     cu = "numeric", #%change in a up move
     cd = "numeric", #%change in a down move
@@ -252,7 +247,6 @@ BinomialLRStockOption <- setClass(
   "BinomialLRStockOption",
   
   slots = c(
-    vol = "numeric", #yearly volatility
     
     d1 = "numeric", #Black-Scholes parameter
     d2 = "numeric", #Black-Scholes parameter
