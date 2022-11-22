@@ -3,7 +3,7 @@ Option <- setClass(
   "Option",
   
   slots = c(
-    S0 = "numeric", #Stock Price
+    S0 = "numeric", #Underlying Price
     K = "numeric", #Strike
     r = "numeric", #Risk Free Rate during the live of the Option
     cD = "numeric", #Context Date in yyyymmdd format
@@ -30,8 +30,6 @@ Option <- setClass(
       return("Error: Underlying price can't be lower than 0")
     } else if(object@K < 0){
       return("Error: Strike can't be lower than 0")
-    } else if(object@r < 0){
-      return("Error: Risk free rate can't be lower than 0")
     } else if(length(object@cD) > 0 & length(object@mD) > 0){
       if(nchar(object@cD) != 8 | nchar(object@mD) != 8){
         return("Error: Please provide dates in the yyyymmdd format")
@@ -84,6 +82,54 @@ setMethod("initialize", "Option",
           }
 )
 
+TwoAssetFXOptions <- setClass(
+  
+  "TwoAssetFXOptions",
+  
+  slots = c(
+    S01 = "numeric", #Underlying Price of the first asset 
+    S02 = "numeric", #Underlying Price of the second asset 
+    K1 = "numeric", #Strike on the first option
+    K2 = "numeric", #Strike on the second option
+    r1 = "numeric", #First Risk Free Rate
+    r2 = "numeric", #Second Risk Free Rate
+    r3 = "numeric", #Third Risk Free Rate
+    cD = "numeric", #Context Date in yyyymmdd format
+    mD = "numeric", #Maturity Date in yyyymmdd format
+    flag = "character", #c for call, p for put
+    vol1 = "numeric", #first yearly volatility
+    vol2 = "numeric", #second yearly volatility
+    p = "numeric", #Price of the option
+    Years = "numeric", #time to maturity in years
+    flavor = "character", #a for american, e for european, b for bermudan
+    ExerciseDates = "vector", #vector of dates when an option can be exercised
+    Barrier = "numeric", #Price of a barrier
+    BarrierType = "character", #Type of a barrier
+    Corr = "numeric", #Correlation between underlyings
+    
+    DiscountFactor = "numeric" #Overall discount Factor to maturity
+  ),
+  
+  validity = function(object){
+    
+  }
+)
+
+setMethod("initialize", "TwoAssetFXOptions",
+          function(.Object, ...) {
+            .Object <- callNextMethod(.Object, ...)
+            validObject(.Object)
+            
+            #If dates are provided calculate the years to maturity
+            if(length(.Object@Years) == 0){
+              .Object@Years <- as.numeric(as.Date(as.character(.Object@mD), format("%Y%m%d")) - as.Date(as.character(.Object@cD), format("%Y%m%d")))/365
+            }
+            .Object@DiscountFactor <- 1/exp(.Object@r3)^(.Object@Years)
+            
+            return(.Object)
+          }
+)
+
 TreeOption <- setClass(
   
   "TreeOption",
@@ -126,7 +172,6 @@ BinomialStockOption <- setClass(
   slots = c(
     cu = "numeric", #%change in a up move
     cd = "numeric", #%change in a down move
-    vol = "numeric", #yearly volatility
     
     pu = "numeric", #Probability of price changing up, in risk-neutral regime
     pd = "numeric" #Probability of price changing down, in risk-neutral regime
@@ -143,7 +188,7 @@ BinomialStockOption <- setClass(
       if(object@vol < 0){
         return("Volatility can't be lower than 0")
       }
-    } else if(!(object@VolatilityMethod %in% c("BSE", "CCR", "Basic"))){
+    } else if(!(object@VolatilityMethod %in% c("BSE", "Basic"))){
       return("Error: Incorrect volatility method")
     }
   },
@@ -169,14 +214,12 @@ setMethod("initialize", "BinomialStockOption",
           }
 )
 
-
 BinomialCCRStockOption <- setClass(
   #Cox-Ross-Rubinstein model
   
   "BinomialCCRStockOption",
   
   slots = c(
-    vol = "numeric", #yearly volatility
     
     cu = "numeric", #%change in a up move
     cd = "numeric", #%change in a down move
@@ -286,6 +329,59 @@ setMethod("initialize", "BinomialLRStockOption",
             .Object@cu <- exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)*(.Object@LR/.Object@pu)
             .Object@cd <- exp((.Object@r - .Object@div)*.Object@YearsPerTimeStep)*((1-.Object@LR)/(1-.Object@pu))
             .Object@AdditionOrMuliplicationFlag <- "m"
+            
+            return(.Object)
+          }
+)
+
+BinomialCCTwoAssetFXOption <- setClass(
+  #Cox-Ross-Rubinstein two asset model
+  
+  "BinomialCCTwoAssetFXOption",
+  
+  slots = c(
+    N = "numeric", #Number of steps
+    
+    YearsPerTimeStep = "numeric", #duration of a single time step,in years
+    DiscountFactorPerTimeStep = "numeric", #Discouning factor used for the drift
+    AdditionOrMuliplicationFlag = "character", #Should script add the difference or multiply by it, hidden variable
+    cu1 = "numeric", #First asset %change in a up move
+    cd1 = "numeric", #First asset %change in a down move
+    cu2 = "numeric", #Second asset %change in a up move
+    cd2 = "numeric", #Second asset %change in a down move
+    puu = "numeric", #Probability of two up moves
+    pud = "numeric", #Probability of up-down move
+    pdu = "numeric", #Probability of down-up move
+    pdd = "numeric" #Probability of two down moves
+  ),
+  
+  validity = function(object){
+    
+  },
+  
+  contains = "TwoAssetFXOptions"
+)
+
+setMethod("initialize", "BinomialCCRMultiAssetFXOption",
+          function(.Object, ...) {
+            .Object <- callNextMethod(.Object, ...)
+            validObject(.Object)
+            
+            .Object@YearsPerTimeStep <- .Object@Years / .Object@N
+            .Object@DiscountFactorPerTimeStep <- exp(-(.Object@r3)*.Object@YearsPerTimeStep)
+            
+            .Object@cu1 <- exp((.Object@vol1/100) * sqrt(.Object@YearsPerTimeStep))
+            .Object@cd1 <- 1/(.Object@cu1)
+            .Object@cu2 <- exp((.Object@vol2/100) * sqrt(.Object@YearsPerTimeStep))
+            .Object@cd2 <- 1/(.Object@cu2)
+            GrowthFactor1 <- 1 - exp(-(.Object@r3 - .Object@r1)*.Object@YearsPerTimeStep)
+            GrowthFactor2 <- 1 - exp(-(.Object@r3 - .Object@r2)*.Object@YearsPerTimeStep)
+            v1 = GrowthFactor1 - ((.Object@vol1/100)^2)/2
+            v2 = GrowthFactor2 - ((.Object@vol2/100)^2)/2
+            .Object@puu <- (1+.Object@Corr+sqrt(.Object@YearsPerTimeStep)*(v1/(.Object@vol1/100)+(v2/(.Object@vol2/100))))/4
+            .Object@pud <- (1-.Object@Corr+sqrt(.Object@YearsPerTimeStep)*(v1/(.Object@vol1/100)-(v2/(.Object@vol2/100))))/4
+            .Object@pdu <- (1-.Object@Corr+sqrt(.Object@YearsPerTimeStep)*(-v1/(.Object@vol1/100)+(v2/(.Object@vol2/100))))/4
+            .Object@pdd <- (1+.Object@Corr+sqrt(.Object@YearsPerTimeStep)*(-v1/(.Object@vol1/100)-(v2/(.Object@vol2/100))))/4
             
             return(.Object)
           }
