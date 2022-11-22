@@ -76,7 +76,7 @@ setMethod("initialize", "Option",
             if(length(.Object@Years) == 0){
               .Object@Years <- as.numeric(as.Date(as.character(.Object@mD), format("%Y%m%d")) - as.Date(as.character(.Object@cD), format("%Y%m%d")))/365
             }
-            .Object@DiscountFactor <- 1/exp(.Object@r - .Object@div)^(.Object@Years)
+            .Object@DiscountFactor <- 1/exp(.Object@r)^(.Object@Years)
             
             return(.Object)
           }
