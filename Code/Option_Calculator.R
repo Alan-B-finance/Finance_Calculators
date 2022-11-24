@@ -96,7 +96,8 @@ TwoAssetFXOptions <- setClass(
     r3 = "numeric", #Third Risk Free Rate
     cD = "numeric", #Context Date in yyyymmdd format
     mD = "numeric", #Maturity Date in yyyymmdd format
-    flag = "character", #c for call, p for put
+    flag1 = "character", #c for call, p for put
+    flag2 = "character", #c for call, p for put
     vol1 = "numeric", #first yearly volatility
     vol2 = "numeric", #second yearly volatility
     p = "numeric", #Price of the option
@@ -362,7 +363,7 @@ BinomialCCTwoAssetFXOption <- setClass(
   contains = "TwoAssetFXOptions"
 )
 
-setMethod("initialize", "BinomialCCRMultiAssetFXOption",
+setMethod("initialize", "BinomialCCTwoAssetFXOption",
           function(.Object, ...) {
             .Object <- callNextMethod(.Object, ...)
             validObject(.Object)
@@ -640,5 +641,82 @@ setMethod(f="BinomialStockOptionGreeks", signature="TreeOption",
               print(paste("Vega:", round(OptionVega, digits)))
               print(paste("Rho:", round(OptionRho, digits)))
             }
+          }
+)
+
+setGeneric("GenerateBinomialTreeTwoAssets", function(optionName) 
+  standardGeneric("GenerateBinomialTree"))
+
+setMethod(f="GenerateBinomialTreeTwoAssets", signature="BinomialCCTwoAssetFXOption", 
+          
+          definition=function(optionName) {
+            
+            StockMovement <- array(nrow = (optionName@N+1)^2, ncol = (optionName@N+1)^2)
+            
+            StockMovementList <- list(StockMovement)
+            
+            return(StockMovementList)
+          }
+)
+
+setGeneric("MonteCarloOnATree", function(optionName, MonteCarloN) 
+  standardGeneric("MonteCarloOnATree"))
+
+setMethod(f="MonteCarloOnATree", signature="TreeOption",
+          
+          definition=function(optionName, MonteCarloN) {
+            
+            MonteCarloMarix <- matrix(nrow = MonteCarloN, ncol = optionName@N)
+            for(i in 1:nrow(MonteCarloMarix)){
+              MonteCarloMarix[i,] <- runif(n = optionName@N, min = 0, max = 1)
+              MonteCarloMarix[i,] <- ifelse(MonteCarloMarix[i,] <= optionName@pu, optionName@cu, optionName@cd)
+              MonteCarloMarix[i, 1] <- MonteCarloMarix[i, 1] * optionName@S0
+              for(j in 2:ncol(MonteCarloMarix)){
+                MonteCarloMarix[i, j] <- MonteCarloMarix[i, j-1] * MonteCarloMarix[i, j]
+              }
+            }
+            if(optionName@flavor == "e")(
+              if(optionName@flag == "c"){
+                PayOut <- pmax(MonteCarloMarix[, ncol(MonteCarloMarix)] - optionName@K, 0)
+              } else if(optionName@flag == "p"){
+                PayOut <- pmax(optionName@K - MonteCarloMarix[, ncol(MonteCarloMarix)], 0)
+              }
+            )
+            
+            if(length(optionName@BarrierType) > 0){
+              if(optionName@BarrierType == "KO"){
+                for(i in 1:nrow(MonteCarloMarix)){
+                  if(optionName@Barrier > optionName@K){
+                    if(any(MonteCarloMarix[i, ] > optionName@Barrier)){
+                      PayOut[i] <- 0
+                    }
+                  } else if(optionName@Barrier < optionName@K){
+                    if(any(MonteCarloMarix[i, ] < optionName@Barrier)){
+                      PayOut[i] <- 0
+                    }
+                  }
+                }
+              } else if(optionName@BarrierType == "KI"){
+                for(i in 1:nrow(MonteCarloMarix)){
+                  if(optionName@Barrier > optionName@K){
+                    if(all(MonteCarloMarix[i, ] < optionName@Barrier)){
+                      PayOut[i] <- 0
+                    }
+                  } else if(optionName@Barrier < optionName@K){
+                    if(all(MonteCarloMarix[i, ] > optionName@Barrier)){
+                      PayOut[i] <- 0
+                    }
+                  }
+                }
+              }
+            }
+            
+            PayOut <- PayOut * optionName@DiscountFactor
+            optionName@p <- mean(PayOut)
+            
+            #Overrides a price in the global environment
+            nameObject <- deparse(substitute(MyOption))
+            assign(nameObject, optionName, envir=parent.frame())
+            return(optionName@p)
           }
 )
