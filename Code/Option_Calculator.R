@@ -644,21 +644,6 @@ setMethod(f="BinomialStockOptionGreeks", signature="TreeOption",
           }
 )
 
-setGeneric("GenerateBinomialTreeTwoAssets", function(optionName) 
-  standardGeneric("GenerateBinomialTree"))
-
-setMethod(f="GenerateBinomialTreeTwoAssets", signature="BinomialCCTwoAssetFXOption", 
-          
-          definition=function(optionName) {
-            
-            StockMovement <- array(nrow = (optionName@N+1)^2, ncol = (optionName@N+1)^2)
-            
-            StockMovementList <- list(StockMovement)
-            
-            return(StockMovementList)
-          }
-)
-
 setGeneric("MonteCarloOnATree", function(optionName, MonteCarloN) 
   standardGeneric("MonteCarloOnATree"))
 
@@ -708,6 +693,96 @@ setMethod(f="MonteCarloOnATree", signature="TreeOption",
                     }
                   }
                 }
+              }
+            }
+            
+            PayOut <- PayOut * optionName@DiscountFactor
+            optionName@p <- mean(PayOut)
+            
+            #Overrides a price in the global environment
+            nameObject <- deparse(substitute(MyOption))
+            assign(nameObject, optionName, envir=parent.frame())
+            return(optionName@p)
+          }
+)
+
+setGeneric("MonteCarloOnATreeTwoAssets", function(optionName, MonteCarloN) 
+  standardGeneric("MonteCarloOnATreeTwoAssets"))
+
+setMethod(f="MonteCarloOnATreeTwoAssets", signature="BinomialCCTwoAssetFXOption", 
+          
+          definition=function(optionName, MonteCarloN) {
+            
+            MonteCarloMarix1 <- matrix(nrow = MonteCarloN, ncol = optionName@N)
+            MonteCarloMarix2 <- matrix(nrow = MonteCarloN, ncol = optionName@N)
+            MonteCarloMarix1[, 1] <- optionName@S01
+            MonteCarloMarix2[, 1] <- optionName@S02
+            for(i in 1:nrow(MonteCarloMarix1)){
+              for(j in 2:ncol(MonteCarloMarix1)){
+                RandomNumber <- runif(1)
+                if(RandomNumber <= optionName@puu){
+                  MonteCarloMarix1[i, j] <- MonteCarloMarix1[i, j-1] * optionName@cu1
+                  MonteCarloMarix2[i, j] <- MonteCarloMarix2[i, j-1] * optionName@cu2
+                } else if(RandomNumber >= optionName@puu & RandomNumber < (optionName@puu + optionName@pud)){
+                  MonteCarloMarix1[i, j] <- MonteCarloMarix1[i, j-1] * optionName@cu1
+                  MonteCarloMarix2[i, j] <- MonteCarloMarix2[i, j-1] * optionName@cd2
+                } else if(RandomNumber >= (optionName@puu + optionName@pud) & RandomNumber < (optionName@puu + optionName@pud + optionName@pdu)){
+                  MonteCarloMarix1[i, j] <- MonteCarloMarix1[i, j-1] * optionName@cd1
+                  MonteCarloMarix2[i, j] <- MonteCarloMarix2[i, j-1] * optionName@cu2
+                } else if(RandomNumber >= (optionName@puu + optionName@pud + optionName@pdu)){
+                  MonteCarloMarix1[i, j] <- MonteCarloMarix1[i, j-1] * optionName@cd1
+                  MonteCarloMarix2[i, j] <- MonteCarloMarix2[i, j-1] * optionName@cd2
+                }
+              }
+            }
+            
+            if(optionName@flavor == "e"){
+              if(optionName@flag1 == "c"){
+                PayOut1 <- pmax(MonteCarloMarix1[, ncol(MonteCarloMarix1)] - optionName@K1, 0)
+              } else if(optionName@flag1 == "p"){
+                PayOut1 <- pmax(optionName@K1 - MonteCarloMarix1[, ncol(MonteCarloMarix1)], 0)
+              }
+              if(optionName@flag2 == "c"){
+                PayOut2 <- pmax(MonteCarloMarix2[, ncol(MonteCarloMarix2)] - optionName@K2, 0)
+              } else if(optionName@flag2 == "p"){
+                PayOut2 <- pmax(optionName@K2 - MonteCarloMarix2[, ncol(MonteCarloMarix2)], 0)
+              }
+            }
+            
+            # if(length(optionName@BarrierType) > 0){
+            #   if(optionName@BarrierType == "KO"){
+            #     for(i in 1:nrow(MonteCarloMarix)){
+            #       if(optionName@Barrier > optionName@K){
+            #         if(any(MonteCarloMarix[i, ] > optionName@Barrier)){
+            #           PayOut[i] <- 0
+            #         }
+            #       } else if(optionName@Barrier < optionName@K){
+            #         if(any(MonteCarloMarix[i, ] < optionName@Barrier)){
+            #           PayOut[i] <- 0
+            #         }
+            #       }
+            #     }
+            #   } else if(optionName@BarrierType == "KI"){
+            #     for(i in 1:nrow(MonteCarloMarix)){
+            #       if(optionName@Barrier > optionName@K){
+            #         if(all(MonteCarloMarix[i, ] < optionName@Barrier)){
+            #           PayOut[i] <- 0
+            #         }
+            #       } else if(optionName@Barrier < optionName@K){
+            #         if(all(MonteCarloMarix[i, ] > optionName@Barrier)){
+            #           PayOut[i] <- 0
+            #         }
+            #       }
+            #     }
+            #   }
+            #}
+            
+            PayOut <- vector("numeric", length(PayOut1))
+            for(i in 1:length(PayOut1)){
+              if(PayOut1[i] < PayOut2[i]){
+                PayOut[i] <- PayOut1[i]
+              } else {
+                PayOut[i] <- PayOut2[i]
               }
             }
             
