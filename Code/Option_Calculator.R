@@ -104,8 +104,10 @@ TwoAssetFXOptions <- setClass(
     Years = "numeric", #time to maturity in years
     flavor = "character", #a for american, e for european, b for bermudan
     ExerciseDates = "vector", #vector of dates when an option can be exercised
-    Barrier = "numeric", #Price of a barrier
-    BarrierType = "character", #Type of a barrier
+    Barrier1 = "numeric", #Price of a barrier 1
+    BarrierType1 = "character", #Type of a barrier  1
+    Barrier2 = "numeric", #Price of a barrier 2
+    BarrierType2 = "character", #Type of a barrier 2
     Corr = "numeric", #Correlation between underlyings
     
     DiscountFactor = "numeric" #Overall discount Factor to maturity
@@ -749,33 +751,60 @@ setMethod(f="MonteCarloOnATreeTwoAssets", signature="BinomialCCTwoAssetFXOption"
               }
             }
             
-            # if(length(optionName@BarrierType) > 0){
-            #   if(optionName@BarrierType == "KO"){
-            #     for(i in 1:nrow(MonteCarloMarix)){
-            #       if(optionName@Barrier > optionName@K){
-            #         if(any(MonteCarloMarix[i, ] > optionName@Barrier)){
-            #           PayOut[i] <- 0
-            #         }
-            #       } else if(optionName@Barrier < optionName@K){
-            #         if(any(MonteCarloMarix[i, ] < optionName@Barrier)){
-            #           PayOut[i] <- 0
-            #         }
-            #       }
-            #     }
-            #   } else if(optionName@BarrierType == "KI"){
-            #     for(i in 1:nrow(MonteCarloMarix)){
-            #       if(optionName@Barrier > optionName@K){
-            #         if(all(MonteCarloMarix[i, ] < optionName@Barrier)){
-            #           PayOut[i] <- 0
-            #         }
-            #       } else if(optionName@Barrier < optionName@K){
-            #         if(all(MonteCarloMarix[i, ] > optionName@Barrier)){
-            #           PayOut[i] <- 0
-            #         }
-            #       }
-            #     }
-            #   }
-            #}
+            if(length(optionName@BarrierType1) > 0){
+              if(optionName@BarrierType1 == "KO"){
+                for(i in 1:nrow(MonteCarloMarix1)){
+                  if(optionName@Barrier1 > optionName@K1){
+                    if(any(MonteCarloMarix1[i, ] > optionName@Barrier1)){
+                      PayOut1[i] <- 0
+                    }
+                  } else if(optionName@Barrier1 < optionName@K1){
+                    if(any(MonteCarloMarix1[i, ] < optionName@Barrier1)){
+                      PayOut1[i] <- 0
+                    }
+                  }
+                }
+              } else if(optionName@BarrierType1 == "KI"){
+                for(i in 1:nrow(MonteCarloMarix1)){
+                  if(optionName@Barrier1 > optionName@K1){
+                    if(all(MonteCarloMarix1[i, ] < optionName@Barrier1)){
+                      PayOut1[i] <- 0
+                    }
+                  } else if(optionName@Barrier1 < optionName@K1){
+                    if(all(MonteCarloMarix1[i, ] > optionName@Barrier1)){
+                      PayOut1[i] <- 0
+                    }
+                  }
+                }
+              }
+            }
+            if(length(optionName@BarrierType2) > 0){
+              if(optionName@BarrierType2 == "KO"){
+                for(i in 2:nrow(MonteCarloMarix2)){
+                  if(optionName@Barrier2 > optionName@K2){
+                    if(any(MonteCarloMarix2[i, ] > optionName@Barrier2)){
+                      PayOut2[i] <- 0
+                    }
+                  } else if(optionName@Barrier2 < optionName@K2){
+                    if(any(MonteCarloMarix2[i, ] < optionName@Barrier2)){
+                      PayOut2[i] <- 0
+                    }
+                  }
+                }
+              } else if(optionName@BarrierType2 == "KI"){
+                for(i in 2:nrow(MonteCarloMarix2)){
+                  if(optionName@Barrier2 > optionName@K2){
+                    if(all(MonteCarloMarix2[i, ] < optionName@Barrier2)){
+                      PayOut2[i] <- 0
+                    }
+                  } else if(optionName@Barrier2 < optionName@K2){
+                    if(all(MonteCarloMarix2[i, ] > optionName@Barrier2)){
+                      PayOut2[i] <- 0
+                    }
+                  }
+                }
+              }
+            }
             
             PayOut <- vector("numeric", length(PayOut1))
             for(i in 1:length(PayOut1)){
